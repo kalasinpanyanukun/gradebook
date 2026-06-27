@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppUser } from './types';
-import { supabase } from './lib/supabase';
+import { supabase, supabaseConfigError } from './lib/supabase';
 import {
   resolveAppUser,
   signOut,
@@ -55,7 +55,36 @@ function RouteFallback() {
   );
 }
 
+function SupabaseConfigErrorScreen({ message }: { message: string }) {
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-10">
+      <section className="w-full max-w-xl rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h1 className="text-xl font-bold text-slate-900">Supabase ยังไม่ได้ตั้งค่า</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">{message}</p>
+        <div className="mt-5 rounded-xl bg-slate-50 p-4 text-left text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">ต้องเพิ่ม Environment Variables บน Vercel:</p>
+          <ul className="mt-2 space-y-1">
+            <li><code>VITE_SUPABASE_URL</code></li>
+            <li><code>VITE_SUPABASE_ANON_KEY</code></li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
+  if (supabaseConfigError) {
+    return <SupabaseConfigErrorScreen message={supabaseConfigError} />;
+  }
+
+  return <ConfiguredApp />;
+}
+
+function ConfiguredApp() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeView, setActiveView] = useState<AppView>(readInitialAppView);
