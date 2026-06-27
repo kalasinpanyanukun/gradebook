@@ -10,6 +10,8 @@ export const formatThaiDateForDisplay = isoDateToDisplay;
 export const PAP5_OFFICIALS_MISSING_SCHEMA_MESSAGE =
   "ฐานข้อมูลยังไม่มีตารางตั้งค่าผู้ลงนาม ปพ.5 กรุณารัน migration `supabase/migrations/0025_school_pap5_officials.sql` ใน Supabase SQL Editor";
 
+export const PAP5_OFFICIALS_MIGRATION_HINT = PAP5_OFFICIALS_MISSING_SCHEMA_MESSAGE;
+
 export const SCHOOL_CLASSROOM_TEACHERS: Record<string, string[]> = {};
 
 type TeacherProfile = Pick<Profile, "id" | "title" | "full_name">;
