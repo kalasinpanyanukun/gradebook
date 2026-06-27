@@ -11,6 +11,8 @@ dist/
 __pycache__/
 *.pyc
 scripts/_math_sample.txt
+scripts/parse_art_curriculum.py
+scripts/parse_social_curriculum.py
 supabase/.temp/
 supabase/seed_batches/
 .seed_payloads/
