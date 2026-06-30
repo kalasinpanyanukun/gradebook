@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, AlertCircle, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { AppData, ScoreConfig, ScoreUnit } from '../types';
 import { StandardIndicatorFilter } from './StandardIndicatorFilter';
+import { ModalPortal } from './ModalPortal';
 
 interface Props {
   isOpen: boolean;
@@ -262,8 +263,9 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden relative">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm transition-all duration-300">
+        <div className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl">
         
         {/* Confirmation Overlay */}
         {showConfirm && (
@@ -499,7 +501,8 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
           <button onClick={onClose} className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors font-medium">ยกเลิก</button>
           <button onClick={handleSaveClick} className="btn btn-primary">บันทึกข้อมูล</button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };

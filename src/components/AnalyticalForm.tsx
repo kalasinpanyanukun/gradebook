@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppData } from '../types';
 import { AutoFillAttributesModal } from './AutoFillAttributesModal';
 import { Sparkles, AlertCircle } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 interface Props {
   students: AppData['students'];
@@ -105,8 +106,9 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, generalInfo, o
     <div className="relative w-full overflow-auto">
       {/* Clear Confirmation Overlay */}
       {showClearConfirm && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 max-w-md w-full text-center animate-in zoom-in-95 duration-200">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl animate-in zoom-in-95 duration-200">
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle size={32} />
             </div>
@@ -126,8 +128,9 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, generalInfo, o
                 ยืนยันการล้างข้อมูล
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       <div className="w-full min-w-0 bg-white p-4" style={{ minHeight: 'calc(100vh - 240px)', fontFamily: 'Sarabun' }}>

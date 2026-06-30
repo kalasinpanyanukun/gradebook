@@ -256,6 +256,13 @@ input[type="number"] {
   white-space: normal;
 }
 
+.score-summary-vertical {
+  height: 270px;
+  line-height: 1.12;
+  padding: 10px 6px;
+  white-space: nowrap;
+}
+
 .attributes-table thead tr:nth-child(3) th.writing-vertical {
   font-size: 0.9em;
   font-weight: 400 !important;
@@ -278,29 +285,79 @@ input[type="number"] {
 
 .gradebook-folder-frame {
   --folder-paper-border: #d9e4f2;
+  --folder-active-border: #9fb4d0;
+  --folder-active-outline: rgba(159, 180, 208, 0.14);
   position: relative;
   overflow: visible;
   border-radius: 16px;
   background: transparent;
 }
 
+.gradebook-folder-frame-general {
+  --folder-active-border: #8fc5ff;
+  --folder-active-outline: rgba(96, 165, 250, 0.14);
+}
+
+.gradebook-folder-frame-students {
+  --folder-active-border: #e7bf43;
+  --folder-active-outline: rgba(234, 179, 8, 0.13);
+}
+
+.gradebook-folder-frame-scores {
+  --folder-active-border: #67c986;
+  --folder-active-outline: rgba(34, 197, 94, 0.13);
+}
+
+.gradebook-folder-frame-attributes1_4 {
+  --folder-active-border: #74a8f7;
+  --folder-active-outline: rgba(37, 99, 235, 0.13);
+}
+
+.gradebook-folder-frame-attributes5_8 {
+  --folder-active-border: #ba91f4;
+  --folder-active-outline: rgba(139, 92, 246, 0.13);
+}
+
+.gradebook-folder-frame-analytical {
+  --folder-active-border: #f4a6b7;
+  --folder-active-outline: rgba(225, 29, 72, 0.1);
+}
+
+.gradebook-folder-frame-indicators {
+  --folder-active-border: #eba66d;
+  --folder-active-outline: rgba(249, 115, 22, 0.12);
+}
+
+.gradebook-folder-frame-instructions1 {
+  --folder-active-border: #73d5dc;
+  --folder-active-outline: rgba(6, 182, 212, 0.12);
+}
+
+.gradebook-folder-frame-instructions2 {
+  --folder-active-border: #a7b6c9;
+  --folder-active-outline: rgba(100, 116, 139, 0.12);
+}
+
 .gradebook-folder-content {
   position: relative;
   z-index: 1;
-  margin-top: -1px;
+  margin-top: -2px;
   overflow: hidden;
-  border: 1px solid var(--folder-paper-border);
+  border: 1px solid color-mix(in srgb, var(--folder-active-border) 18%, var(--folder-paper-border));
+  border-top-color: rgba(226, 232, 240, 0.58);
   border-radius: 0 0 12px 12px;
   background: #ffffff;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 10px 16px -18px rgba(15, 23, 42, 0.32),
+    inset 1px 0 0 color-mix(in srgb, var(--folder-active-border) 9%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--folder-active-border) 9%, transparent),
     0 18px 34px -30px rgba(15, 23, 42, 0.42);
 }
 
 .gradebook-folder-content > div:first-child {
   border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
-  padding-top: 30px !important;
+  padding-top: 36px !important;
 }
 
 .gradebook-folder-content-document {
@@ -333,69 +390,92 @@ input[type="number"] {
 }
 
 .folder-tabs-track {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: max-content;
   align-items: flex-end;
   min-height: 58px;
   padding-top: 0;
+  padding-inline: 26px 16px;
   isolation: isolate;
 }
 
 .folder-tab {
-  --folder-tab-bg: linear-gradient(180deg, #ffffff 0%, #e5eaf1 100%);
-  --folder-tab-active-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  --folder-tab-bg: #e5eaf1;
+  --folder-tab-active-bg: #ffffff;
   --folder-tab-border: #cbd5e1;
   --folder-tab-accent: #64748b;
   --folder-tab-text: #475569;
   --folder-tab-icon: #64748b;
   position: relative;
   display: inline-flex;
-  flex: 1 1 0;
-  min-width: 138px;
+  flex: 0.76 1 0;
+  min-width: 111px;
   max-width: none;
-  height: 46px;
-  margin-left: -14px;
+  height: 44px;
+  margin-left: -13px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--folder-tab-border);
-  border-bottom-color: var(--folder-paper-border, #d9e4f2);
-  border-radius: 10px 8px 0 0;
+  border: 1px solid color-mix(in srgb, var(--folder-tab-border) 74%, #a8b6c8);
+  border-bottom-color: color-mix(in srgb, var(--folder-tab-border) 70%, #cfd8e6);
+  border-radius: 9px 0 0 0;
   background: var(--folder-tab-bg);
   color: var(--folder-tab-text);
+  clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 100%, 0 100%);
+  filter:
+    drop-shadow(-7px -5px 8px rgba(15, 23, 42, 0.1))
+    drop-shadow(10px 7px 9px rgba(15, 23, 42, 0.18));
   font: inherit;
   font-size: 13px;
   font-weight: 800;
   line-height: 1.2;
-  padding: 10px 18px 12px 20px;
+  padding: 9px 24px 10px 18px;
   text-align: center;
-  transform: translateY(0) skewX(-10deg);
-  transform-origin: left bottom;
+  transform: translateY(0);
+  transform-origin: center bottom;
   transition:
     background 180ms ease,
     border-color 180ms ease,
+    filter 180ms ease,
     box-shadow 180ms ease,
     color 180ms ease,
     transform 180ms ease;
   box-shadow:
-    -10px 0 16px -13px rgba(15, 23, 42, 0.48),
-    10px -8px 18px -15px rgba(15, 23, 42, 0.42),
-    0 6px 14px -18px rgba(15, 23, 42, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -10px 16px rgba(148, 163, 184, 0.12);
+    inset 0 10px 14px rgba(255, 255, 255, 0.34),
+    inset 0 -12px 14px rgba(100, 116, 139, 0.1);
 }
 
-.folder-tab:first-child {
-  margin-left: 0;
+.folder-tab:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 6px;
+  left: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.56);
+  box-shadow: -7px 7px 12px rgba(15, 23, 42, 0.2);
+  pointer-events: none;
 }
 
 .folder-tab::after {
   content: "";
   position: absolute;
-  inset: 6px 8px auto;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.72);
+  top: 0;
+  right: 24px;
+  z-index: 1;
+  width: 1px;
+  height: calc(100% + 1px);
+  background: color-mix(in srgb, var(--folder-tab-border) 74%, #8ea0b6);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.58);
+  transform: skewX(29deg);
+  transform-origin: top center;
   pointer-events: none;
+}
+
+.folder-tab:first-child {
+  margin-left: 0;
 }
 
 .folder-tab-label {
@@ -408,7 +488,7 @@ input[type="number"] {
   gap: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transform: skewX(10deg);
+  transform: none;
   white-space: nowrap;
 }
 
@@ -428,43 +508,40 @@ input[type="number"] {
 
 .folder-tab-inactive:hover {
   color: color-mix(in srgb, var(--folder-tab-text) 82%, #0f172a);
-  transform: translateY(-3px) skewX(-10deg);
-  box-shadow:
-    -12px 0 18px -13px rgba(15, 23, 42, 0.48),
-    12px -10px 20px -15px rgba(15, 23, 42, 0.4),
-    0 13px 20px -18px rgba(15, 23, 42, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-3px);
+  filter:
+    drop-shadow(-8px -6px 10px rgba(15, 23, 42, 0.12))
+    drop-shadow(12px 10px 12px rgba(15, 23, 42, 0.24));
 }
 
 .folder-tab-active {
+  flex: 1 0 0;
   height: 58px;
-  margin-bottom: -1px;
+  margin-bottom: -5px;
+  min-width: 138px;
   border-color: var(--folder-paper-border, #d9e4f2);
-  border-top: 3px solid var(--folder-tab-accent);
   border-bottom-color: #ffffff;
   background: #ffffff;
   color: color-mix(in srgb, var(--folder-tab-text) 70%, #0f172a);
-  transform: translateY(0) skewX(-10deg);
+  transform: translateY(-4px);
+  filter:
+    drop-shadow(-9px -7px 12px rgba(15, 23, 42, 0.14))
+    drop-shadow(16px 13px 14px rgba(15, 23, 42, 0.25));
   box-shadow:
-    -12px 0 20px -18px rgba(15, 23, 42, 0.38),
-    12px -8px 22px -18px color-mix(in srgb, var(--folder-tab-accent) 28%, transparent),
-    inset 0 1px 0 #ffffff;
+    inset 0 1px 0 #ffffff,
+    inset 0 10px 14px rgba(255, 255, 255, 0.82),
+    inset 0 -16px 18px rgba(226, 232, 240, 0.18);
 }
 
 .folder-tab-active::before {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: -2px;
-  left: 0;
-  height: 3px;
-  background: #ffffff;
-  pointer-events: none;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: -9px 9px 14px rgba(15, 23, 42, 0.18);
 }
 
 .folder-tab-active::after {
-  height: 3px;
-  background: color-mix(in srgb, var(--folder-tab-accent) 26%, #ffffff);
+  right: 24px;
+  background: color-mix(in srgb, var(--folder-paper-border) 80%, #7c8ca2);
+  transform: skewX(23deg);
 }
 
 @media (max-width: 860px) {
@@ -477,17 +554,22 @@ input[type="number"] {
     padding-inline: 0;
   }
 
+  .folder-tabs-track {
+    min-height: 56px;
+    padding-inline: 18px 10px;
+  }
+
   .folder-tab {
     flex: 1 0 138px;
-    height: 46px;
-    margin-left: -12px;
-    padding: 10px 14px 11px 16px;
+    height: 44px;
+    margin-left: -14px;
+    padding: 9px 24px 10px 18px;
     font-size: 12px;
   }
 
   .folder-tab-active {
-    height: 54px;
-    transform: translateY(0) skewX(-10deg);
+    height: 56px;
+    transform: translateY(-4px);
   }
 }
 

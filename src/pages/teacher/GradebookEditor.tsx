@@ -40,8 +40,8 @@ const menuItems = [
   { id: "attributes5_8", label: "คุณลักษณะ 5-8" },
   { id: "analytical", label: "คิดวิเคราะห์" },
   { id: "indicators", label: "ตัวชี้วัด" },
-  { id: "instructions1", label: "คำชี้แจง 1", surface: "document" },
-  { id: "instructions2", label: "คำชี้แจง 2", surface: "document" },
+  { id: "instructions1", label: "คำชี้แจง", surface: "document" },
+  { id: "instructions2", label: "คำชี้แจงต่อ", surface: "document" },
 ];
 
 const STUDENT_NAME_TITLES = [
@@ -435,7 +435,7 @@ export const GradebookEditor: React.FC<GradebookEditorProps> = ({
       <main className="px-4 pt-4 pb-6 sm:px-6 lg:px-8">
         <div className="ui-card overflow-hidden animate-fade-up">
           <div className="p-2 sm:p-3">
-            <div className="gradebook-folder-frame">
+            <div className={`gradebook-folder-frame gradebook-folder-frame-${activeTab}`}>
               <FolderTabs
                 menuItems={menuItems}
                 activeId={activeTab}

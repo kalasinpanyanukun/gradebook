@@ -3,6 +3,7 @@ import { AppData, ScoreConfig, ScoreUnit } from '../types';
 import { ScoreConfigModal } from './ScoreConfigModal';
 import { AutoFillModal } from './AutoFillModal';
 import { AlertCircle, Sparkles } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 interface Props {
   students: AppData['students'];
@@ -34,6 +35,7 @@ const scoreWidthStyle = (width: number, left?: number): React.CSSProperties => (
 const SCORE_LABEL_COLUMN_STYLE = scoreWidthStyle(136);
 const SCORE_INDICATOR_COLUMN_STYLE = scoreWidthStyle(44);
 const SCORE_NARROW_COLUMN_STYLE = scoreWidthStyle(44);
+const SCORE_SUMMARY_COLUMN_STYLE = scoreWidthStyle(84);
 
 const getIndicatorSlotCount = (unit: ScoreUnit) =>
   Math.max(MIN_INDICATOR_SLOTS_PER_UNIT, unit.indicators.length);
@@ -222,8 +224,9 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
     <div className="relative flex w-full flex-col overflow-auto">
       {/* Clear Confirmation Overlay */}
       {showClearConfirm && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 max-w-md w-full text-center animate-in zoom-in-95 duration-200">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl animate-in zoom-in-95 duration-200">
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle size={32} />
             </div>
@@ -243,8 +246,9 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
                 ยืนยันการล้างข้อมูล
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       <div className="w-full bg-white p-4 sm:p-6" style={{ fontFamily: 'Sarabun' }}>
@@ -278,7 +282,7 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
                 <th rowSpan={2} className="bg-orange-excel" style={SCORE_NARROW_COLUMN_STYLE}><span className="writing-vertical inline-block">รวมคะแนนตลอดภาคเรียน</span></th>
                 <th colSpan={2} className="bg-orange-excel">ระดับผลการเรียน</th>
                 <th rowSpan={4} className="bg-orange-excel" style={SCORE_NARROW_COLUMN_STYLE}><span className="writing-vertical inline-block">ร้อยละ</span></th>
-                <th rowSpan={4} className="bg-orange-excel" style={SCORE_NARROW_COLUMN_STYLE}><span className="writing-vertical inline-block">สรุปจำนวนตัวชี้วัด/ผลการเรียนรู้</span></th>
+                <th rowSpan={4} className="bg-orange-excel" style={SCORE_SUMMARY_COLUMN_STYLE}><span className="writing-vertical score-summary-vertical inline-block">สรุปจำนวนตัวชี้วัด/ผลการเรียนรู้</span></th>
               </tr>
               <tr>
                 <th className="bg-orange-excel whitespace-normal px-2" style={SCORE_LABEL_COLUMN_STYLE}>รหัสตัวชี้วัด/ผลการเรียนรู้</th>
@@ -424,7 +428,7 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
                     </td>
                     <td className="text-red-600 text-center">{hasScoreData && total < 50 ? '0' : ''}</td>
                     <td className="text-center">{hasScoreData ? total.toFixed(2) : ''}</td>
-                    <td className="text-center font-bold text-lg">
+                    <td className="text-center font-bold text-lg" style={SCORE_SUMMARY_COLUMN_STYLE}>
                       {hasScoreData ? (total >= 50 ? <span className="text-green-600">ผ</span> : <span className="text-red-600">มผ</span>) : ''}
                     </td>
                   </tr>

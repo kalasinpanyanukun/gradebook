@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppData } from '../types';
 import { AutoFillAttributesModal } from './AutoFillAttributesModal';
 import { AlertCircle, Sparkles } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 interface Props {
   students: AppData['students'];
@@ -89,8 +90,9 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, generalInfo
   return (
     <div className="w-full overflow-auto">
       {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl animate-in zoom-in-95 duration-200">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600">
               <AlertCircle size={32} />
             </div>
@@ -114,8 +116,9 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, generalInfo
                 ยืนยันการล้างค่า
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       <div className="w-full min-w-0 bg-white p-4" style={{ minHeight: 'calc(100vh - 240px)', fontFamily: 'Sarabun' }}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppData, ScoreConfig } from '../types';
 import { Sparkles, X } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 interface Props {
   isOpen: boolean;
@@ -71,8 +72,9 @@ export const AutoFillModal: React.FC<Props> = ({ isOpen, onClose, scoreConfig, s
   const canFill = fillMode === 'all' || students.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+        <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
@@ -215,7 +217,8 @@ export const AutoFillModal: React.FC<Props> = ({ isOpen, onClose, scoreConfig, s
             บันทึกคะแนน
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };
