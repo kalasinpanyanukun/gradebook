@@ -1103,8 +1103,9 @@ export const exportToExcel = async (data: any) => {
     "คะแนนสอบปลายภาค",
     "รวมคะแนนตลอดภาคเรียน",
   ];
-  const summaryFullScores = [70, 10, 20, 100];
-  const summaryPassScores = [35, 5, 10, 50];
+  const storedScore = data.scoreConfig?.storedScore ?? 70;
+  const summaryFullScores = [storedScore, 10, 20, 100];
+  const summaryPassScores = [Math.floor(storedScore / 2), 5, 10, 50];
 
   summaryHeaders.forEach((header, idx) => {
     if (idx === 0 || idx === 3) {

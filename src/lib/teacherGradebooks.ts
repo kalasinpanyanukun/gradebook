@@ -53,7 +53,9 @@ const TEACHER_ASSIGNMENT_SELECT_BASE = `
       is_active,
       primary_grade_entry_enabled,
       primary_entry_start_date,
-      primary_entry_end_date
+      primary_entry_end_date,
+      study_start_date,
+      study_end_date
     )
   )
 `;
@@ -89,7 +91,9 @@ const TEACHER_ASSIGNMENT_SELECT_WITH_THIRD = `
       is_active,
       primary_grade_entry_enabled,
       primary_entry_start_date,
-      primary_entry_end_date
+      primary_entry_end_date,
+      study_start_date,
+      study_end_date
     )
   )
 `;
@@ -107,6 +111,16 @@ function withoutSemesterSettingsColumns(select: string): string {
     .replace(/\s+entry_end_date,\n/g, "\n");
 }
 
+function withoutStudyPeriodColumns(select: string): string {
+  return select
+    .replace(
+      /\s+primary_entry_end_date,\n\s+study_start_date,\n\s+study_end_date/g,
+      "\n      primary_entry_end_date",
+    )
+    .replace(/\s+study_start_date,\n/g, "\n")
+    .replace(/\s+study_end_date\n/g, "\n");
+}
+
 function isMissingEntryWindowColumn(error: unknown): boolean {
   return (
     isSchemaCacheErrorFor(error, "entry_start_date") ||
@@ -116,6 +130,13 @@ function isMissingEntryWindowColumn(error: unknown): boolean {
 
 function isMissingSemesterSettingsColumn(error: unknown): boolean {
   return isSchemaCacheErrorFor(error, "grade_entry_enabled");
+}
+
+function isMissingStudyPeriodColumn(error: unknown): boolean {
+  return (
+    isSchemaCacheErrorFor(error, "study_start_date") ||
+    isSchemaCacheErrorFor(error, "study_end_date")
+  );
 }
 
 export interface TeacherAssignmentView {
@@ -142,6 +163,8 @@ export interface TeacherAssignmentView {
   academic_year_id: string;
   year_be: number;
   year_is_active: boolean;
+  study_start_date?: string | null;
+  study_end_date?: string | null;
   semester_grade_entry_enabled: boolean;
   student_count: number;
   gradebook_id: string | null;
@@ -209,6 +232,8 @@ type RawAssignment = {
       primary_grade_entry_enabled?: boolean | null;
       primary_entry_start_date?: string | null;
       primary_entry_end_date?: string | null;
+      study_start_date?: string | null;
+      study_end_date?: string | null;
     } | null;
   } | null;
 };
@@ -311,6 +336,12 @@ export async function fetchTeacherAssignments(
   if (result.error && isSchemaCacheErrorFor(result.error, "homeroom_teacher_3_id")) {
     result = await runQuery(TEACHER_ASSIGNMENT_SELECT_BASE);
   }
+  if (result.error && isMissingStudyPeriodColumn(result.error)) {
+    result = await runQuery(withoutStudyPeriodColumns(TEACHER_ASSIGNMENT_SELECT_WITH_THIRD));
+  }
+  if (result.error && isSchemaCacheErrorFor(result.error, "homeroom_teacher_3_id")) {
+    result = await runQuery(withoutStudyPeriodColumns(TEACHER_ASSIGNMENT_SELECT_BASE));
+  }
   if (result.error && isMissingEntryWindowColumn(result.error)) {
     result = await runQuery(withoutEntryWindowColumns(TEACHER_ASSIGNMENT_SELECT_WITH_THIRD));
   }
@@ -319,6 +350,12 @@ export async function fetchTeacherAssignments(
   }
   if (result.error && isSchemaCacheErrorFor(result.error, "homeroom_teacher_3_id")) {
     result = await runQuery(withoutEntryWindowColumns(TEACHER_ASSIGNMENT_SELECT_BASE));
+  }
+  if (result.error && isMissingStudyPeriodColumn(result.error)) {
+    result = await runQuery(withoutStudyPeriodColumns(withoutEntryWindowColumns(TEACHER_ASSIGNMENT_SELECT_WITH_THIRD)));
+  }
+  if (result.error && isSchemaCacheErrorFor(result.error, "homeroom_teacher_3_id")) {
+    result = await runQuery(withoutStudyPeriodColumns(withoutEntryWindowColumns(TEACHER_ASSIGNMENT_SELECT_BASE)));
   }
   if (result.error && isMissingSemesterSettingsColumn(result.error)) {
     result = await runQuery(withoutSemesterSettingsColumns(TEACHER_ASSIGNMENT_SELECT_BASE));
@@ -395,6 +432,8 @@ export async function fetchTeacherAssignments(
       academic_year_id: year.id,
       year_be: year.year_be,
       year_is_active: year.is_active,
+      study_start_date: year.study_start_date ?? null,
+      study_end_date: year.study_end_date ?? null,
       semester_grade_entry_enabled: semesterGradeEntryEnabled,
       student_count: count ?? 0,
       gradebook_id: gb?.id ?? null,
@@ -464,7 +503,24 @@ async function buildStudentRoster(
 function mergeRosterWithSavedState(
   roster: Student[],
   savedStudents: Student[],
+  hasSavedRoster = true,
 ): Student[] {
+  if (hasSavedRoster) {
+    const rosterByStudentId = new Map(roster.map((student) => [student.id, student]));
+
+    return savedStudents.map((savedStudent) => {
+      const latestStudent = rosterByStudentId.get(savedStudent.id);
+      if (!latestStudent) return savedStudent;
+
+      return {
+        ...savedStudent,
+        studentId: latestStudent.studentId,
+        citizenId: latestStudent.citizenId,
+        name: latestStudent.name,
+      };
+    });
+  }
+
   const targetByStudentId = new Map(
     savedStudents.map((student) => [student.id, student.targetPercentage]),
   );
@@ -539,6 +595,8 @@ function buildGeneralInfo(
     deputyDirector: "",
     schoolDirector: "",
     approvalDate: new Date().toISOString().split("T")[0],
+    studyStartDate: assignment.study_start_date ?? "",
+    studyEndDate: assignment.study_end_date ?? "",
   };
 }
 
@@ -612,6 +670,7 @@ export async function loadGradebookSession(
   );
   const savedGeneralInfo =
     (data.general_info as Partial<AppData["generalInfo"]> | null) ?? {};
+  const hasSavedRoster = Array.isArray(data.students);
   const homeroomTeacher1 =
     savedGeneralInfo.homeroomTeacher1 || assignment.homeroom_teacher_1_name;
   const homeroomTeacher2 =
@@ -637,6 +696,8 @@ export async function loadGradebookSession(
       homeroomTeacher2,
       homeroomTeacher3,
       homeroomTeachers,
+      studyStartDate: assignment.study_start_date ?? "",
+      studyEndDate: assignment.study_end_date ?? "",
     },
   );
 
@@ -653,7 +714,7 @@ export async function loadGradebookSession(
     data: {
       ...appData,
       generalInfo: mergedGeneralInfo,
-      students: mergeRosterWithSavedState(roster, appData.students),
+      students: mergeRosterWithSavedState(roster, appData.students, hasSavedRoster),
     },
   };
 }

@@ -22,7 +22,7 @@ export const CurriculumPreviewPage: React.FC = () => {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-3 py-2 sm:px-4 sm:py-2.5 lg:px-5 lg:py-3">
-        <CurriculumIndicatorsPage />
+        <CurriculumIndicatorsPage readOnly />
       </main>
     </div>
   );

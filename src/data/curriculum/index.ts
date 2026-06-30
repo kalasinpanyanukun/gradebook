@@ -29,6 +29,33 @@ const CURRICULUM_BY_AREA: Record<string, CurriculumIndicatorRecord[]> = {
   [ELECTIVE_LEARNING_AREA]: electiveCurriculum,
 };
 
+const CURRICULUM_SUBJECT_OPTION_ORDER: Record<string, string[]> = {
+  วิทยาศาสตร์และเทคโนโลยี: [
+    'ชีววิทยา',
+    'เคมี',
+    'ฟิสิกส์',
+    'โลกและอวกาศ',
+    'ออกแบบและเทคโนโลยี',
+    'วิทยาการคำนวณ',
+  ],
+  'สังคมศึกษา ศาสนา และวัฒนธรรม': [
+    'ศาสนา ศีลธรรม จริยธรรม',
+    'หน้าที่พลเมือง วัฒนธรรม และการดำเนินชีวิตในสังคม',
+    'เศรษฐศาสตร์',
+    'ประวัติศาสตร์',
+    'ภูมิศาสตร์',
+  ],
+  ศิลปะ: [
+    'ทัศนศิลป์',
+    'ดนตรี',
+    'นาฏศิลป์',
+  ],
+  สุขศึกษาและพลศึกษา: [
+    'สุขศึกษา',
+    'พลศึกษา',
+  ],
+};
+
 export const CURRICULUM_SUBJECT_CATALOG: CurriculumSubjectCatalogItem[] = [
   {
     id: 'thai',
@@ -196,5 +223,10 @@ export function getCurriculumSubjectOptions(learningArea: string, gradeLevel?: s
     learningArea,
     gradeLevel: gradeLevel && gradeLevel !== 'all' ? gradeLevel : undefined,
   });
-  return Array.from(new Set(rows.map((row) => row.subject))).sort((a, b) => a.localeCompare(b, 'th'));
+  const subjects = Array.from(new Set(rows.map((row) => row.subject)));
+  const preferredOrder = CURRICULUM_SUBJECT_OPTION_ORDER[learningArea];
+  if (!preferredOrder) return subjects;
+
+  const order = new Map(preferredOrder.map((subject, index) => [subject, index]));
+  return subjects.sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
 }

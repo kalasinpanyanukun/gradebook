@@ -208,12 +208,28 @@ body {
   background: transparent;
   text-align: center;
   outline: none;
-  border-radius: 4px;
+  border-radius: 0;
+  caret-color: #111827;
 }
 
 .excel-input:focus {
-  background-color: #dbeafe;
-  box-shadow: inset 0 0 0 2px #2563eb;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.score-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.excel-table td:focus-within,
+.score-entry-cell:focus-within {
+  box-shadow: inset 0 0 0 1px #ef4444;
+}
+
+.excel-input::selection {
+  background: #d1d5db;
+  color: #111827;
 }
 
 /* Hide number input spin buttons */
@@ -240,22 +256,291 @@ input[type="number"] {
   white-space: normal;
 }
 
+.attributes-table thead tr:nth-child(3) th.writing-vertical {
+  font-size: 0.9em;
+  font-weight: 400 !important;
+}
+
+.excel-scroll-area {
+  background: #fff;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.excel-scroll-content {
+  display: inline-block;
+  min-width: 100%;
+  vertical-align: top;
+}
+
+.excel-scroll-content > .excel-table {
+  margin-bottom: 0;
+}
+
+.gradebook-folder-frame {
+  --folder-paper-border: #d9e4f2;
+  position: relative;
+  overflow: visible;
+  border-radius: 16px;
+  background: transparent;
+}
+
+.gradebook-folder-content {
+  position: relative;
+  z-index: 1;
+  margin-top: -1px;
+  overflow: hidden;
+  border: 1px solid var(--folder-paper-border);
+  border-radius: 0 0 12px 12px;
+  background: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 18px 34px -30px rgba(15, 23, 42, 0.42);
+}
+
+.gradebook-folder-content > div:first-child {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  padding-top: 30px !important;
+}
+
+.gradebook-folder-content-document {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 38px, #edf2f8 150px);
+}
+
+.gradebook-folder-content-document > div:first-child {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 42px, rgba(241, 245, 249, 0.92) 150px),
+    #f1f5f9 !important;
+}
+
+.folder-tabs-shell {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 8px 0 0;
+}
+
+.folder-tabs-scroll {
+  position: relative;
+  z-index: 1;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 0;
+}
+
+.folder-tabs-track {
+  display: flex;
+  width: 100%;
+  min-width: max-content;
+  align-items: flex-end;
+  min-height: 58px;
+  padding-top: 0;
+  isolation: isolate;
+}
+
+.folder-tab {
+  --folder-tab-bg: linear-gradient(180deg, #ffffff 0%, #e5eaf1 100%);
+  --folder-tab-active-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  --folder-tab-border: #cbd5e1;
+  --folder-tab-accent: #64748b;
+  --folder-tab-text: #475569;
+  --folder-tab-icon: #64748b;
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 0;
+  min-width: 138px;
+  max-width: none;
+  height: 46px;
+  margin-left: -14px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--folder-tab-border);
+  border-bottom-color: var(--folder-paper-border, #d9e4f2);
+  border-radius: 10px 8px 0 0;
+  background: var(--folder-tab-bg);
+  color: var(--folder-tab-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 10px 18px 12px 20px;
+  text-align: center;
+  transform: translateY(0) skewX(-10deg);
+  transform-origin: left bottom;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+  box-shadow:
+    -10px 0 16px -13px rgba(15, 23, 42, 0.48),
+    10px -8px 18px -15px rgba(15, 23, 42, 0.42),
+    0 6px 14px -18px rgba(15, 23, 42, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -10px 16px rgba(148, 163, 184, 0.12);
+}
+
+.folder-tab:first-child {
+  margin-left: 0;
+}
+
+.folder-tab::after {
+  content: "";
+  position: absolute;
+  inset: 6px 8px auto;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+
+.folder-tab-label {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: skewX(10deg);
+  white-space: nowrap;
+}
+
+.folder-tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--folder-tab-icon);
+  stroke-width: 2.2;
+}
+
+.folder-tab-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-tab-inactive:hover {
+  color: color-mix(in srgb, var(--folder-tab-text) 82%, #0f172a);
+  transform: translateY(-3px) skewX(-10deg);
+  box-shadow:
+    -12px 0 18px -13px rgba(15, 23, 42, 0.48),
+    12px -10px 20px -15px rgba(15, 23, 42, 0.4),
+    0 13px 20px -18px rgba(15, 23, 42, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.folder-tab-active {
+  height: 58px;
+  margin-bottom: -1px;
+  border-color: var(--folder-paper-border, #d9e4f2);
+  border-top: 3px solid var(--folder-tab-accent);
+  border-bottom-color: #ffffff;
+  background: #ffffff;
+  color: color-mix(in srgb, var(--folder-tab-text) 70%, #0f172a);
+  transform: translateY(0) skewX(-10deg);
+  box-shadow:
+    -12px 0 20px -18px rgba(15, 23, 42, 0.38),
+    12px -8px 22px -18px color-mix(in srgb, var(--folder-tab-accent) 28%, transparent),
+    inset 0 1px 0 #ffffff;
+}
+
+.folder-tab-active::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 3px;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.folder-tab-active::after {
+  height: 3px;
+  background: color-mix(in srgb, var(--folder-tab-accent) 26%, #ffffff);
+}
+
+@media (max-width: 860px) {
+  .folder-tabs-shell {
+    border-radius: 12px 12px 0 0;
+    padding: 8px 0 0;
+  }
+
+  .folder-tabs-scroll {
+    padding-inline: 0;
+  }
+
+  .folder-tab {
+    flex: 1 0 138px;
+    height: 46px;
+    margin-left: -12px;
+    padding: 10px 14px 11px 16px;
+    font-size: 12px;
+  }
+
+  .folder-tab-active {
+    height: 54px;
+    transform: translateY(0) skewX(-10deg);
+  }
+}
+
+.instruction-table {
+  border-collapse: collapse;
+}
+
+.instruction-table thead {
+  background: transparent !important;
+}
+
+.instruction-table thead th {
+  background: #fff !important;
+  color: #111827 !important;
+  border-color: #334155 !important;
+  box-shadow: none !important;
+  font-weight: 600;
+}
+
+.instruction-table td,
+.instruction-table th {
+  border-color: #334155 !important;
+}
+
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-/* ---------- Slim, elegant scrollbars ---------- */
-*::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+/* ---------- Chunky, easy-to-grab scrollbars ---------- */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #64748b #e2e8f0;
 }
-*::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; background-clip: padding-box; border: 2px solid transparent; }
+*::-webkit-scrollbar { width: 28px; height: 28px; }
+*::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.14);
+}
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #dbe4ef 0%, #94a3b8 48%, #64748b 100%);
+  border-radius: 3px;
+  border: 1px solid #475569;
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 0.75),
+    inset -1px -1px 0 rgb(15 23 42 / 0.22);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #e7edf5 0%, #7c8ca3 48%, #475569 100%);
+}
+*::-webkit-scrollbar-corner { background: #e2e8f0; }
 
 /* Dark scrollbar inside dark sidebar */
 .dark-scroll::-webkit-scrollbar-thumb {

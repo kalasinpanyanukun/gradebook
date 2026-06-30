@@ -59,8 +59,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { id, username, full_name, title, role, reset_password_to_username } = await req.json();
+    const { id, username, full_name, title, role, password, reset_password_to_username } = await req.json();
     const normalizedUsername = normalizeUsername(username ?? '');
+    const newPassword = typeof password === 'string' ? password.trim() : '';
 
     if (!id || !normalizedUsername || !full_name) {
       return new Response(JSON.stringify({ error: 'กรอกข้อมูลไม่ครบ' }), {
@@ -71,6 +72,13 @@ Deno.serve(async (req) => {
 
     if (normalizedUsername.length < 6) {
       return new Response(JSON.stringify({ error: 'Username ต้องมีอย่างน้อย 6 ตัวอักษรเพื่อใช้เป็นรหัสผ่าน' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (newPassword && newPassword.length < 6) {
+      return new Response(JSON.stringify({ error: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -137,7 +145,9 @@ Deno.serve(async (req) => {
       email: usernameToAuthEmail(normalizedUsername),
       email_confirm: true,
     };
-    if (reset_password_to_username !== false) {
+    if (newPassword) {
+      authPayload.password = newPassword;
+    } else if (reset_password_to_username !== false) {
       authPayload.password = normalizedUsername;
     }
 

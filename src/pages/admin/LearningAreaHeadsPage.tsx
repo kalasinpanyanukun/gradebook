@@ -110,7 +110,7 @@ export const LearningAreaHeadsPage: React.FC<LearningAreaHeadsPageProps> = ({
     setSuccess(null);
 
     try {
-      await savePap5Officials(currentUser.schoolId, settings);
+      const syncedGradebooks = await savePap5Officials(currentUser.schoolId, settings);
       void logActivity(
         currentUser.schoolId,
         currentUser.id,
@@ -118,7 +118,11 @@ export const LearningAreaHeadsPage: React.FC<LearningAreaHeadsPageProps> = ({
         'บันทึกการตั้งค่าผู้ลงนามหน้าปก ปพ.5',
         currentUser.role,
       );
-      setSuccess('บันทึกการตั้งค่าเรียบร้อยแล้ว');
+      setSuccess(
+        syncedGradebooks > 0
+          ? `บันทึกการตั้งค่าเรียบร้อยแล้ว และอัปเดตหน้าปก ปพ.5 ${syncedGradebooks} รายการ`
+          : 'บันทึกการตั้งค่าเรียบร้อยแล้ว',
+      );
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'บันทึกการตั้งค่าไม่สำเร็จ'));
     } finally {

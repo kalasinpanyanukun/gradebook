@@ -20,6 +20,19 @@ function isEdgeFunctionUnavailable(error: unknown): boolean {
   );
 }
 
+async function readFunctionErrorMessage(error: unknown): Promise<string | null> {
+  const context = (error as { context?: unknown })?.context;
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+      return String(payload.error ?? payload.message ?? '').trim() || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function createTeacherAccount(input: CreateTeacherAccountInput): Promise<void> {
   const username = normalizeUsername(input.username);
   const password = (input.password ?? username).trim();
@@ -33,7 +46,10 @@ export async function createTeacherAccount(input: CreateTeacherAccountInput): Pr
 
   try {
     const { data, error } = await supabase.functions.invoke('create-teacher', { body });
-    if (error) throw error;
+    if (error) {
+      const detail = await readFunctionErrorMessage(error);
+      throw new Error(detail || error.message);
+    }
     if (data?.error) throw new Error(String(data.error));
     return;
   } catch (err) {

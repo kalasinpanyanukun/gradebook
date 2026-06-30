@@ -28,8 +28,78 @@ export type Pap5OfficialNames = {
   deputyDirector: string;
 };
 
+type Pap5OfficialNamesRow = {
+  head_of_learning_area: string | null;
+  head_of_evaluation: string | null;
+  deputy_director: string | null;
+};
+
+const KALASIN_PANYANUKUL_SCHOOL_NAME_PART = "กาฬสินธุ์ปัญญานุกูล";
+const KALASIN_DEFAULT_HEAD_OF_EVALUATION = "นางสาว ประภาวดี ศรีทับ";
+const KALASIN_DEFAULT_DEPUTY_DIRECTOR = "นางสาว อัจฉราภรณ์ เศษวิ";
+
+const KALASIN_DEFAULT_LEARNING_AREA_HEADS: Record<string, string> = {
+  ภาษาไทย: "นางสาว พรชิดา ภูแสงสั่น",
+  คณิตศาสตร์: "นางสาว ราตรี ภูจอมแก้ว",
+  วิทยาศาสตร์และเทคโนโลยี: "นางสาว พิยา คำปัน",
+  "สังคมศึกษา ศาสนา และวัฒนธรรม": "นางสาว ประภาวดี ศรีทับ",
+  สุขศึกษาและพลศึกษา: "นาย ทนงเดช วงษ์ประจันต์",
+  ศิลปะ: "นาย วสันต์ วอแพง",
+  ภาษาต่างประเทศ: "นางสาว พรนิมา สว่างศรี",
+  การงานอาชีพ: "นาง ฐิติมา สุ้มเกษตร",
+};
+
 function blankLearningAreaHeads(): Record<string, string | null> {
   return Object.fromEntries(LEARNING_AREAS.map((area) => [area, null]));
+}
+
+function normalizeLearningArea(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function resolveLearningAreaHeadId(
+  settings: Pap5OfficialsSettings,
+  learningArea: string,
+): string | null {
+  const exactMatch = settings.learningAreaHeads[learningArea];
+  if (exactMatch !== undefined) return exactMatch;
+
+  const normalizedTarget = normalizeLearningArea(learningArea);
+  const matchedEntry = Object.entries(settings.learningAreaHeads).find(
+    ([area]) => normalizeLearningArea(area) === normalizedTarget,
+  );
+  return matchedEntry?.[1] ?? null;
+}
+
+function resolveDefaultLearningAreaHead(learningArea: string): string {
+  const normalizedTarget = normalizeLearningArea(learningArea);
+  const matchedEntry = Object.entries(KALASIN_DEFAULT_LEARNING_AREA_HEADS).find(
+    ([area]) => normalizeLearningArea(area) === normalizedTarget,
+  );
+  return matchedEntry?.[1] ?? "";
+}
+
+function shouldUseKalasinDefaults(generalInfo: AppData["generalInfo"]): boolean {
+  return !generalInfo.schoolName || generalInfo.schoolName.includes(KALASIN_PANYANUKUL_SCHOOL_NAME_PART);
+}
+
+function defaultOfficialNames(
+  learningArea: string,
+  generalInfo: AppData["generalInfo"],
+): Pap5OfficialNames {
+  if (!shouldUseKalasinDefaults(generalInfo)) {
+    return {
+      headOfLearningArea: "",
+      headOfEvaluation: "",
+      deputyDirector: "",
+    };
+  }
+
+  return {
+    headOfLearningArea: resolveDefaultLearningAreaHead(learningArea),
+    headOfEvaluation: KALASIN_DEFAULT_HEAD_OF_EVALUATION,
+    deputyDirector: KALASIN_DEFAULT_DEPUTY_DIRECTOR,
+  };
 }
 
 export function teacherDisplayName(profile: Pick<Profile, "title" | "full_name"> | null | undefined): string {
@@ -69,6 +139,14 @@ function isPap5SchemaError(error: unknown): boolean {
     isSchemaCacheErrorFor(error, "school_pap5_officials") ||
     isSchemaCacheErrorFor(error, "school_learning_area_heads")
   );
+}
+
+function isMissingOfficialNamesRpc(error: unknown): boolean {
+  return isSchemaCacheErrorFor(error, "get_pap5_official_names");
+}
+
+function isMissingOfficialsSyncRpc(error: unknown): boolean {
+  return isSchemaCacheErrorFor(error, "sync_pap5_official_names_to_gradebooks");
 }
 
 async function fetchProfileNames(profileIds: Array<string | null | undefined>): Promise<Map<string, string>> {
@@ -128,7 +206,7 @@ export async function loadPap5Officials(schoolId: string): Promise<Pap5Officials
 export async function savePap5Officials(
   schoolId: string,
   settings: Pap5OfficialsSettings,
-): Promise<void> {
+): Promise<number> {
   const updatedAt = new Date().toISOString();
 
   const { error: officialsError } = await supabase
@@ -165,21 +243,53 @@ export async function savePap5Officials(
       ? new Error(PAP5_OFFICIALS_MISSING_SCHEMA_MESSAGE)
       : headsError;
   }
+
+  const { data: syncCount, error: syncError } = await supabase.rpc(
+    "sync_pap5_official_names_to_gradebooks",
+    { p_school_id: schoolId },
+  );
+
+  if (syncError && !isMissingOfficialsSyncRpc(syncError)) {
+    throw syncError;
+  }
+
+  return typeof syncCount === "number" ? syncCount : 0;
 }
 
 async function loadPap5OfficialNames(
   schoolId: string,
   learningArea: string,
 ): Promise<Pap5OfficialNames> {
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc("get_pap5_official_names", {
+      p_school_id: schoolId,
+      p_learning_area: learningArea,
+    })
+    .maybeSingle();
+
+  if (!rpcError) {
+    const row = rpcData as Pap5OfficialNamesRow | null;
+    return {
+      headOfLearningArea: row?.head_of_learning_area ?? "",
+      headOfEvaluation: row?.head_of_evaluation ?? "",
+      deputyDirector: row?.deputy_director ?? "",
+    };
+  }
+
+  if (!isMissingOfficialNamesRpc(rpcError)) {
+    throw rpcError;
+  }
+
   const settings = await loadPap5Officials(schoolId);
+  const headOfLearningAreaId = resolveLearningAreaHeadId(settings, learningArea);
   const profileNames = await fetchProfileNames([
-    settings.learningAreaHeads[learningArea] ?? null,
+    headOfLearningAreaId,
     settings.headOfEvaluationId,
     settings.deputyDirectorId,
   ]);
 
   return {
-    headOfLearningArea: profileNames.get(settings.learningAreaHeads[learningArea] ?? "") ?? "",
+    headOfLearningArea: profileNames.get(headOfLearningAreaId ?? "") ?? "",
     headOfEvaluation: profileNames.get(settings.headOfEvaluationId ?? "") ?? "",
     deputyDirector: profileNames.get(settings.deputyDirectorId ?? "") ?? "",
   };
@@ -188,13 +298,33 @@ async function loadPap5OfficialNames(
 function mergeOfficials(
   generalInfo: AppData["generalInfo"],
   officialNames: Pap5OfficialNames,
+  learningArea: string,
 ): AppData["generalInfo"] {
+  const defaults = defaultOfficialNames(learningArea, generalInfo);
+
   return {
     ...generalInfo,
-    headOfLearningArea: officialNames.headOfLearningArea,
-    headOfEvaluation: officialNames.headOfEvaluation,
-    deputyDirector: officialNames.deputyDirector,
+    headOfLearningArea:
+      officialNames.headOfLearningArea || generalInfo.headOfLearningArea || defaults.headOfLearningArea,
+    headOfEvaluation:
+      officialNames.headOfEvaluation || generalInfo.headOfEvaluation || defaults.headOfEvaluation,
+    deputyDirector:
+      officialNames.deputyDirector || generalInfo.deputyDirector || defaults.deputyDirector,
   };
+}
+
+export function applyPap5OfficialDisplayDefaults(
+  generalInfo: AppData["generalInfo"],
+): AppData["generalInfo"] {
+  return mergeOfficials(
+    generalInfo,
+    {
+      headOfLearningArea: "",
+      headOfEvaluation: "",
+      deputyDirector: "",
+    },
+    generalInfo.learningArea,
+  );
 }
 
 export async function mergePap5OfficialsIntoGeneralInfo(
@@ -204,14 +334,14 @@ export async function mergePap5OfficialsIntoGeneralInfo(
 ): Promise<AppData["generalInfo"]> {
   try {
     const officialNames = await loadPap5OfficialNames(schoolId, learningArea);
-    return mergeOfficials(generalInfo, officialNames);
+    return mergeOfficials(generalInfo, officialNames, learningArea);
   } catch (error) {
     if (getErrorMessage(error, "") === PAP5_OFFICIALS_MISSING_SCHEMA_MESSAGE) {
       return mergeOfficials(generalInfo, {
         headOfLearningArea: "",
         headOfEvaluation: "",
         deputyDirector: "",
-      });
+      }, learningArea);
     }
     throw error;
   }

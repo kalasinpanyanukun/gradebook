@@ -1,16 +1,30 @@
 import React, { useState } from 'react';
 import { AppData } from '../types';
 import { AutoFillAttributesModal } from './AutoFillAttributesModal';
-import { Sparkles } from 'lucide-react';
+import { AlertCircle, Sparkles } from 'lucide-react';
 
 interface Props {
   students: AppData['students'];
   data: AppData['attributes'];
+  generalInfo: AppData['generalInfo'];
   onChange: (data: AppData['attributes']) => void;
 }
 
-export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange }) => {
+function buildReportTitle(generalInfo: AppData['generalInfo']) {
+  return [
+    'ผลการประเมินคุณลักษณะอันพึงประสงค์',
+    generalInfo.gradeLevel ? `ชั้น ${generalInfo.gradeLevel}` : '',
+    generalInfo.semester ? `ภาคเรียนที่ ${generalInfo.semester}` : '',
+    generalInfo.academicYear ? `ปีการศึกษา ${generalInfo.academicYear}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+export const Attributes5_8Form: React.FC<Props> = ({ students, data, generalInfo, onChange }) => {
   const [showAutoFillModal, setShowAutoFillModal] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const reportTitle = buildReportTitle(generalInfo);
+  const fields = ['attr5_1', 'attr5_2', 'attr6_1', 'attr6_2', 'attr7_1', 'attr7_2', 'attr7_3', 'attr8_1', 'attr8_2'];
 
   const handleChange = (studentId: string, field: string, value: string) => {
     const numValue = value === '' ? '' : parseInt(value);
@@ -23,11 +37,13 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange })
     });
   };
 
-  const handleAutoFill = (minScore: number, maxScore: number) => {
+  const handleAutoFill = (minScore: number, maxScore: number, studentIds?: string[]) => {
     const newData = { ...data };
-    const fields = ['attr5_1', 'attr5_2', 'attr6_1', 'attr6_2', 'attr7_1', 'attr7_2', 'attr7_3', 'attr8_1', 'attr8_2'];
+    const targetStudents = studentIds?.length
+      ? students.filter(student => studentIds.includes(student.id))
+      : students;
     
-    students.forEach(student => {
+    targetStudents.forEach(student => {
       if (!newData[student.id]) {
         newData[student.id] = {};
       }
@@ -39,6 +55,21 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange })
     });
     
     onChange(newData);
+  };
+
+  const confirmClearData = () => {
+    const newData = { ...data };
+
+    students.forEach(student => {
+      const nextStudentData = { ...(newData[student.id] || {}) };
+      fields.forEach(field => {
+        nextStudentData[field] = '';
+      });
+      newData[student.id] = nextStudentData;
+    });
+
+    onChange(newData);
+    setShowClearConfirm(false);
   };
 
   const getAvg = (keys: string[], attrs: any) => {
@@ -56,24 +87,55 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange })
   const rowsToRender = students.length;
 
   return (
-    <div className="flex justify-center rounded-2xl bg-slate-100/90 p-4 sm:p-6 overflow-auto">
-      <div className="bg-white p-4 rounded-lg ring-1 ring-slate-200/80 shadow-[0_12px_32px_-8px_rgb(15,23,42,0.12)]" style={{ width: '1123px', minHeight: '794px', fontFamily: 'Sarabun' }}>
-        <div className="flex justify-between items-center mb-2">
+    <div className="w-full overflow-auto">
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <AlertCircle size={32} />
+            </div>
+            <h3 className="mb-2 text-2xl font-bold text-slate-800">ยืนยันการล้างค่า</h3>
+            <p className="mb-6 text-slate-600">
+              คุณแน่ใจหรือไม่ที่จะล้างค่าคุณลักษณะ 5-8 ทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                className="rounded-lg border border-slate-300 px-6 py-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearData}
+                className="rounded-lg bg-red-600 px-6 py-2.5 font-medium text-white shadow-md transition-colors hover:bg-red-700"
+              >
+                ยืนยันการล้างค่า
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full min-w-0 bg-white p-4" style={{ minHeight: 'calc(100vh - 240px)', fontFamily: 'Sarabun' }}>
+        <div className="mb-3 grid gap-2 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
           <h2 className="text-xl font-bold">คุณลักษณะ5-8</h2>
-          <button
-            onClick={() => setShowAutoFillModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium transition-colors"
-          >
-            <Sparkles size={18} />
-            สุ่มคะแนน
-          </button>
+          <div className="text-center text-lg font-bold leading-7 text-slate-900 lg:max-w-[760px]">
+            {reportTitle}
+          </div>
+          <div aria-hidden="true" />
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="excel-table whitespace-nowrap">
+        <div className="excel-scroll-area overflow-auto max-w-full">
+          <div className="excel-scroll-content">
+          <table className="excel-table attributes-table min-w-max whitespace-nowrap">
             <thead>
               <tr>
-                <th rowSpan={4} className="bg-orange-excel w-10 writing-vertical">เลขที่/ภาคเรียนที่/ระดับคุณภาพ/ตัวชี้วัดคุณลักษณะ</th>
+                <th rowSpan={4} className="bg-orange-excel sticky left-0 z-20" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>เลขที่</th>
+                <th rowSpan={4} className="bg-orange-excel sticky z-20" style={{ left: '48px', width: '128px', minWidth: '128px', maxWidth: '128px' }}>เลขประจำตัว</th>
+                <th rowSpan={4} className="bg-orange-excel sticky z-20" style={{ left: '176px', width: '180px', minWidth: '180px', maxWidth: '180px' }}>เลขประจำตัวประชาชน</th>
+                <th rowSpan={4} className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400" style={{ left: '356px', width: '292px', minWidth: '292px', maxWidth: '292px' }}>ชื่อ - สกุล</th>
                 <th colSpan={19} className="bg-orange-excel">แบบบันทึกผลการประเมินคุณลักษณะอันพึงประสงค์</th>
               </tr>
               <tr>
@@ -143,7 +205,10 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange })
 
                 return (
                   <tr key={student ? student.id : `empty-${index}`}>
-                    <td className="text-center">{index + 1}</td>
+                    <td className="text-center sticky left-0 z-10 bg-white" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>{index + 1}</td>
+                    <td className="text-center sticky z-10 bg-white" style={{ left: '48px', width: '128px', minWidth: '128px', maxWidth: '128px' }}>{student?.studentId ?? ''}</td>
+                    <td className="text-center sticky z-10 bg-white" style={{ left: '176px', width: '180px', minWidth: '180px', maxWidth: '180px' }}>{student?.citizenId ?? ''}</td>
+                    <td className="text-left px-2 sticky z-10 bg-white border-r-2 border-r-slate-400" style={{ left: '356px', width: '292px', minWidth: '292px', maxWidth: '292px' }}>{student?.name ?? ''}</td>
                     <td><input type="number" max={3} min={0} className="excel-input text-center" value={attrs['attr5_1'] ?? ''} onChange={(e) => student && handleChange(student.id, 'attr5_1', e.target.value)} disabled={!student} /></td>
                     <td><input type="number" max={3} min={0} className="excel-input text-center" value={attrs['attr5_2'] ?? ''} onChange={(e) => student && handleChange(student.id, 'attr5_2', e.target.value)} disabled={!student} /></td>
                     <td className="bg-orange-100 text-center">{avg5}</td>
@@ -173,11 +238,31 @@ export const Attributes5_8Form: React.FC<Props> = ({ students, data, onChange })
             </tbody>
           </table>
         </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => setShowAutoFillModal(true)}
+            className="flex items-center gap-2 rounded-md bg-emerald-600 px-6 py-2 font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            <Sparkles size={18} />
+            ระบบช่วยลงคะแนนอัตโนมัติ
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowClearConfirm(true)}
+            className="rounded-lg bg-red-50 px-6 py-2 font-medium text-red-600 transition-colors hover:bg-red-100"
+          >
+            ล้างค่า
+          </button>
+        </div>
       </div>
       
       <AutoFillAttributesModal
         isOpen={showAutoFillModal}
         onClose={() => setShowAutoFillModal(false)}
+        students={students}
         onFill={handleAutoFill}
       />
     </div>

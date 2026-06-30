@@ -1,4 +1,5 @@
 import React from "react";
+import { applyPap5OfficialDisplayDefaults } from "../lib/pap5Officials";
 import { AppData } from "../types";
 
 interface Props {
@@ -157,6 +158,7 @@ export const GeneralInfoForm: React.FC<Props> = ({
 
   const schoolName = data.schoolName || DEFAULT_SCHOOL_NAME;
   const agencyName = data.agencyName || DEFAULT_AGENCY_NAME;
+  const displayGeneralInfo = applyPap5OfficialDisplayDefaults(data);
   const logoUrl =
     data.logoUrl && data.logoUrl !== LEGACY_LOGO_URL
       ? data.logoUrl
@@ -449,7 +451,7 @@ export const GeneralInfoForm: React.FC<Props> = ({
           <div className="flex items-center justify-center -mt-4">
             <div className="w-24"></div>
             <div className="w-56 text-center">
-              ( {data.headOfLearningArea} )
+              ( {displayGeneralInfo.headOfLearningArea} )
             </div>
             <div className="w-56"></div>
           </div>
@@ -461,7 +463,7 @@ export const GeneralInfoForm: React.FC<Props> = ({
           </div>
           <div className="flex items-center justify-center -mt-4">
             <div className="w-24"></div>
-            <div className="w-56 text-center">( {data.headOfEvaluation} )</div>
+            <div className="w-56 text-center">( {displayGeneralInfo.headOfEvaluation} )</div>
             <div className="w-56"></div>
           </div>
 
@@ -474,7 +476,7 @@ export const GeneralInfoForm: React.FC<Props> = ({
           </div>
           <div className="flex items-center justify-center -mt-4">
             <div className="w-24"></div>
-            <div className="w-56 text-center">( {data.deputyDirector} )</div>
+            <div className="w-56 text-center">( {displayGeneralInfo.deputyDirector} )</div>
             <div className="w-56"></div>
           </div>
 

@@ -21,6 +21,7 @@ interface TeacherFormState {
   full_name: string;
   title: string;
   role: UserRole;
+  password: string;
 }
 
 interface RoleGroup {
@@ -36,9 +37,17 @@ const emptyForm = (): TeacherFormState => ({
   full_name: '',
   title: '',
   role: 'teacher',
+  password: '',
 });
 
 const roleGroups: RoleGroup[] = [
+  {
+    key: 'developers',
+    title: 'ผู้พัฒนาระบบ',
+    description: 'บัญชีผู้พัฒนาระบบสำหรับดูแลระบบหลัก',
+    icon: ShieldCheck,
+    roles: ['super_admin'],
+  },
   {
     key: 'admins',
     title: 'ผู้ดูแลระบบ (admin)',
@@ -62,7 +71,16 @@ const roleGroups: RoleGroup[] = [
   },
 ];
 
+const executiveNameOrder = [
+  'นาย มีเกียรติ นาสมตรึก',
+  'นางสาว อัจฉราภรณ์ เศษวิ',
+  'นาย วุฒิพงษ์ วิลาจันทร์',
+  'นาง นวลลักษณ์ นาสมตรึก',
+  'นางสาว ปานฤทัย เนื่องศรี',
+];
+
 function displayName(teacher: TeacherRow): string {
+  if (isMainAdminAccount(teacher) || teacher.role === 'super_admin') return 'ผู้พัฒนาระบบ';
   return [teacher.title, teacher.full_name].filter(Boolean).join(' ');
 }
 
@@ -73,6 +91,7 @@ function isMainAdminAccount(teacher: TeacherRow): boolean {
 function displayGroupKey(teacher: TeacherRow): string {
   if (teacher.role === 'teacher') return 'teachers';
   if (teacher.role === 'executive') return 'executives';
+  if (isMainAdminAccount(teacher) || teacher.role === 'super_admin') return 'developers';
   if (teacher.role === 'admin' || teacher.role === 'super_admin') {
     return isMainAdminAccount(teacher) ? 'admins' : 'executives';
   }
@@ -88,12 +107,24 @@ function roleBadgeClass(role: UserRole): string {
 
 function displayedRoleLabel(teacher: TeacherRow, groupKey: string): string {
   if (groupKey === 'executives') return 'บริหาร';
+  if (groupKey === 'developers' || isMainAdminAccount(teacher) || teacher.role === 'super_admin') return 'ผู้พัฒนาระบบ';
   return ROLE_LABELS[teacher.role];
 }
 
 function displayedRoleBadgeClass(teacher: TeacherRow, groupKey: string): string {
   if (groupKey === 'executives') return 'bg-amber-50 text-amber-700 border-amber-100';
   return roleBadgeClass(teacher.role);
+}
+
+function sortGroupRows(rows: TeacherRow[], groupKey: string): TeacherRow[] {
+  if (groupKey !== 'executives') return rows;
+  return [...rows].sort((a, b) => {
+    const aIndex = executiveNameOrder.indexOf(displayName(a));
+    const bIndex = executiveNameOrder.indexOf(displayName(b));
+    const aRank = aIndex >= 0 ? aIndex : executiveNameOrder.length;
+    const bRank = bIndex >= 0 ? bIndex : executiveNameOrder.length;
+    return aRank - bRank || displayName(a).localeCompare(displayName(b), 'th');
+  });
 }
 
 export const TeachersPage: React.FC<TeachersPageProps> = ({
@@ -127,10 +158,15 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
   }, [canEditSuperAdmin]);
 
   const groupedTeachers = useMemo(() => {
-    return roleGroups.map((group) => ({
-      ...group,
-      rows: teachers.filter((teacher) => displayGroupKey(teacher) === group.key),
-    }));
+    return roleGroups
+      .map((group) => ({
+        ...group,
+        rows: sortGroupRows(
+          teachers.filter((teacher) => displayGroupKey(teacher) === group.key),
+          group.key,
+        ),
+      }))
+      .filter((group) => group.rows.length > 0);
   }, [teachers]);
 
   const loadTeachers = useCallback(async () => {
@@ -183,15 +219,29 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
     }
 
     try {
+      const username = form.username.trim();
+      const { data: existingUser, error: existingError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('school_id', currentUser.schoolId)
+        .ilike('username', username)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+      if (existingUser) {
+        throw new Error(`Username "${username}" มีอยู่แล้ว กรุณาใช้ username อื่น`);
+      }
+
       await createTeacherAccount({
-        username: form.username.trim(),
+        username,
         fullName: form.full_name.trim(),
         title: form.title.trim() || null,
         role: form.role,
+        password: form.password.trim() || undefined,
       });
 
       closeModal();
-      setMessage('เพิ่มผู้ใช้งานแล้ว และตั้งรหัสผ่านเริ่มต้นเป็น username');
+      setMessage(form.password.trim() ? 'เพิ่มผู้ใช้งานแล้ว และตั้งรหัสผ่านตามที่กำหนด' : 'เพิ่มผู้ใช้งานแล้ว และตั้งรหัสผ่านเริ่มต้นเป็น username');
       await loadTeachers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'เพิ่มผู้ใช้งานไม่สำเร็จ');
@@ -207,6 +257,7 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
       full_name: teacher.full_name,
       title: teacher.title ?? '',
       role: teacher.role,
+      password: '',
     });
     setShowEditModal(true);
   };
@@ -231,6 +282,13 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
       return;
     }
 
+    const newPassword = form.password.trim();
+    if (newPassword && newPassword.length < 6) {
+      setError('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+      setSaving(false);
+      return;
+    }
+
     try {
       const { data, error: fnError } = await supabase.functions.invoke('update-teacher', {
         body: {
@@ -239,15 +297,21 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
           full_name: form.full_name.trim(),
           title: form.title.trim() || null,
           role: form.role,
-          reset_password_to_username: true,
+          password: newPassword || undefined,
+          reset_password_to_username: false,
         },
       });
 
       if (fnError) throw fnError;
       if (data?.error) throw new Error(data.error as string);
 
+      if (newPassword && editing.id === currentUser.id) {
+        const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+        if (passwordError) throw passwordError;
+      }
+
       closeModal();
-      setMessage('บันทึกข้อมูลแล้ว และตั้งรหัสผ่านเป็น username ล่าสุด');
+      setMessage(newPassword ? 'บันทึกข้อมูลแล้ว และเปลี่ยนรหัสผ่านใหม่เรียบร้อยแล้ว' : 'บันทึกข้อมูลแล้ว');
       await loadTeachers();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ';
@@ -495,7 +559,9 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
                 <h3 className="text-lg font-bold text-slate-900">
                   {showAddModal ? 'เพิ่มผู้ใช้งานใหม่' : 'แก้ไขข้อมูลผู้ใช้งาน'}
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">รหัสผ่านจะถูกตั้งเป็น username อัตโนมัติ</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {showAddModal ? 'กำหนดรหัสผ่านได้เอง หรือเว้นว่างเพื่อใช้ username เป็นรหัสผ่านเริ่มต้น' : 'กรอกรหัสผ่านใหม่เฉพาะเมื่อต้องการเปลี่ยนรหัสผ่าน'}
+                </p>
               </div>
               <button type="button" onClick={closeModal} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
@@ -514,6 +580,22 @@ export const TeachersPage: React.FC<TeachersPageProps> = ({
                   autoComplete="off"
                 />
               </div>
+
+              {(showAddModal || showEditModal) && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    {showAddModal ? 'รหัสผ่านเริ่มต้น' : 'รหัสผ่านใหม่'}
+                  </label>
+                  <input
+                    type="text"
+                    value={form.password}
+                    onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                    placeholder={showAddModal ? 'เว้นว่างเพื่อใช้ username หรือกรอก @ksp123456' : 'เว้นว่างถ้าไม่ต้องการเปลี่ยนรหัสผ่าน'}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    autoComplete="new-password"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">คำนำหน้า</label>

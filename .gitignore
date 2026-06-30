@@ -20,3 +20,5 @@ Student-list/
 Teacher-list/
 private_data/
 curriculum_source/
+
+.env*

@@ -11,10 +11,59 @@ interface Props {
   onSave: (config: ScoreConfig) => void;
 }
 
+const STORED_SCORE_OPTIONS = [60, 70, 80, 90] as const;
+const DEFAULT_STORED_SCORE = 70;
+const DEFAULT_UNIT_COUNT = 3;
+
+const getStoredScore = (config?: ScoreConfig) => {
+  const score = config?.storedScore;
+  return STORED_SCORE_OPTIONS.includes(score as typeof STORED_SCORE_OPTIONS[number])
+    ? score as number
+    : DEFAULT_STORED_SCORE;
+};
+
+const splitScoreEvenly = (totalScore: number, parts: number) => {
+  if (parts <= 0) return [];
+  const baseScore = Math.floor(totalScore / parts);
+  const remainder = totalScore % parts;
+  return Array.from({ length: parts }, (_, index) => baseScore + (index < remainder ? 1 : 0));
+};
+
+const createDefaultUnits = (storedScore = DEFAULT_STORED_SCORE): ScoreUnit[] => {
+  const unitScores = splitScoreEvenly(storedScore, DEFAULT_UNIT_COUNT);
+  return unitScores.map((unitScore) => ({
+    name: '',
+    indicators: [{ code: '', fullScore: unitScore, passingScore: Math.floor(unitScore / 2) }]
+  }));
+};
+
+const distributeScoresAcrossUnits = (currentUnits: ScoreUnit[], targetStoredScore: number): ScoreUnit[] => {
+  if (currentUnits.length === 0) return createDefaultUnits(targetStoredScore);
+
+  const unitScores = splitScoreEvenly(targetStoredScore, currentUnits.length);
+  return currentUnits.map((unit, unitIndex) => {
+    const indicators = unit.indicators.length > 0
+      ? unit.indicators
+      : [{ code: '', fullScore: 0, passingScore: 0 }];
+    const indicatorScores = splitScoreEvenly(unitScores[unitIndex], indicators.length);
+
+    return {
+      ...unit,
+      indicators: indicators.map((indicator, indicatorIndex) => ({
+        ...indicator,
+        fullScore: indicatorScores[indicatorIndex],
+        passingScore: Math.floor(indicatorScores[indicatorIndex] / 2)
+      }))
+    };
+  });
+};
+
 export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo, initialConfig, onSave }) => {
+  const initialStoredScore = getStoredScore(initialConfig);
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>(initialConfig?.selectedIndicators || []);
-  const [numUnits, setNumUnits] = useState<number>(initialConfig?.units.length || 1);
-  const [units, setUnits] = useState<ScoreUnit[]>(initialConfig?.units || [{ name: '', indicators: [{ code: '', fullScore: 70, passingScore: 35 }] }]);
+  const [numUnits, setNumUnits] = useState<number>(initialConfig?.units.length || DEFAULT_UNIT_COUNT);
+  const [storedScore, setStoredScore] = useState<number>(initialStoredScore);
+  const [units, setUnits] = useState<ScoreUnit[]>(initialConfig?.units || createDefaultUnits(initialStoredScore));
   const [error, setError] = useState<string | null>(null);
   
   const [showConfirm, setShowConfirm] = useState(false);
@@ -23,24 +72,42 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
 
   const learningArea = generalInfo.learningArea;
   const subjectName = generalInfo.subjectName;
+  const subjectCode = generalInfo.subjectCode;
   const gradeLevel = generalInfo.gradeLevel;
 
   const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
-    if (isOpen && !initialConfig) {
-      setSelectedIndicators([]);
-      setNumUnits(1);
-      setUnits([{ name: '', indicators: [{ code: '', fullScore: 70, passingScore: 35 }] }]);
-      setError(null);
-      setShowConfirm(false);
-      setShowClearConfirm(false);
-      setMainStandard('');
-      setResetKey(prev => prev + 1);
-    }
-  }, [isOpen, initialConfig]);
+    if (!isOpen) return;
 
-  const recalculateLastScore = (currentUnits: ScoreUnit[]) => {
+    const configMatchesCurrentSubject =
+      initialConfig?.learningArea === learningArea &&
+      initialConfig?.subjectName === subjectName &&
+      (!initialConfig.subjectCode || initialConfig.subjectCode === subjectCode);
+
+    const nextStoredScore = getStoredScore(initialConfig);
+
+    if (initialConfig && configMatchesCurrentSubject) {
+      setSelectedIndicators(initialConfig.selectedIndicators || []);
+      setNumUnits(initialConfig.units.length || DEFAULT_UNIT_COUNT);
+      setStoredScore(nextStoredScore);
+      setUnits(initialConfig.units.length > 0 ? initialConfig.units : createDefaultUnits(nextStoredScore));
+      setMainStandard(initialConfig.standard || '');
+    } else {
+      setSelectedIndicators([]);
+      setNumUnits(DEFAULT_UNIT_COUNT);
+      setStoredScore(DEFAULT_STORED_SCORE);
+      setUnits(createDefaultUnits());
+      setMainStandard('');
+    }
+
+    setError(null);
+    setShowConfirm(false);
+    setShowClearConfirm(false);
+    setResetKey(prev => prev + 1);
+  }, [isOpen, initialConfig, learningArea, subjectName, subjectCode]);
+
+  const recalculateLastScore = (currentUnits: ScoreUnit[], targetStoredScore = storedScore) => {
     if (currentUnits.length === 0) return currentUnits;
     
     const newUnits = JSON.parse(JSON.stringify(currentUnits)); // Deep copy
@@ -57,7 +124,7 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
       });
     });
 
-    const remaining = Math.max(0, 70 - totalExceptLast);
+    const remaining = Math.max(0, targetStoredScore - totalExceptLast);
     newUnits[lastUIdx].indicators[lastIIdx].fullScore = remaining;
     newUnits[lastUIdx].indicators[lastIIdx].passingScore = Math.floor(remaining / 2);
 
@@ -75,8 +142,13 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
       } else if (num < prev.length) {
         newUnits.splice(num);
       }
-      return recalculateLastScore(newUnits);
+      return distributeScoresAcrossUnits(newUnits, storedScore);
     });
+  };
+
+  const handleStoredScoreChange = (score: number) => {
+    setStoredScore(score);
+    setUnits(prev => distributeScoresAcrossUnits(prev, score));
   };
 
   const handleUnitNameChange = (index: number, name: string) => {
@@ -101,7 +173,7 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
       }
       unit.indicators = currentIndicators;
       newUnits[unitIndex] = unit;
-      return recalculateLastScore(newUnits);
+      return distributeScoresAcrossUnits(newUnits, storedScore);
     });
   };
 
@@ -165,8 +237,8 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
     }
 
     const total = calculateTotalScore();
-    if (total !== 70) {
-      setError(`ผลรวมคะแนนเต็มต้องเท่ากับ 70 คะแนน (ปัจจุบันรวมได้ ${total} คะแนน)`);
+    if (total !== storedScore) {
+      setError(`ผลรวมคะแนนเต็มต้องเท่ากับ ${storedScore} คะแนน (ปัจจุบันรวมได้ ${total} คะแนน)`);
       return;
     }
 
@@ -177,8 +249,10 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
     onSave({
       learningArea,
       subjectName,
+      subjectCode,
       standard: mainStandard,
       selectedIndicators,
+      storedScore,
       units
     });
     setShowConfirm(false);
@@ -237,8 +311,9 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
                 <button 
                   onClick={() => {
                     setSelectedIndicators([]);
-                    setNumUnits(1);
-                    setUnits([{ name: '', indicators: [{ code: '', fullScore: 70, passingScore: 35 }] }]);
+                    setNumUnits(DEFAULT_UNIT_COUNT);
+                    setStoredScore(DEFAULT_STORED_SCORE);
+                    setUnits(createDefaultUnits());
                     setError(null);
                     setMainStandard('');
                     setResetKey(prev => prev + 1);
@@ -254,7 +329,7 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
         )}
 
         <div className="flex justify-between items-center p-5 border-b bg-slate-50/50">
-          <h3 className="text-xl font-bold text-slate-800">บันทึกคะแนน (ตั้งค่าตัวชี้วัด)</h3>
+          <h3 className="text-xl font-bold text-slate-800">ตั้งค่าตัวชี้วัด</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
             <X size={24} />
           </button>
@@ -282,23 +357,43 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
           <StandardIndicatorFilter 
             key={resetKey}
             subjectName={subjectName} 
+            subjectCode={subjectCode}
             learningArea={learningArea}
             gradeLevel={gradeLevel} 
             onSelectIndicators={handleSelectIndicators} 
           />
 
           <div className="border-t border-slate-100 pt-6">
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">จำนวนหน่วยการเรียนรู้</label>
-              <select 
-                value={numUnits} 
-                onChange={(e) => handleNumUnitsChange(parseInt(e.target.value))}
-                className="w-32 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm bg-white"
-              >
-                {[1, 2, 3, 4, 5].map(n => (
-                  <option key={n} value={n}>{n} หน่วย</option>
-                ))}
-              </select>
+            <div className="mb-5 space-y-3">
+              <h3 className="rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3 text-center text-lg font-bold text-slate-800">
+                การกำหนดตัวชี้วัดและคะแนน
+              </h3>
+              <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 shadow-sm sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">จำนวนหน่วยการเรียนรู้</label>
+                  <select
+                    value={numUnits}
+                    onChange={(e) => handleNumUnitsChange(parseInt(e.target.value))}
+                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm bg-white"
+                  >
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <option key={n} value={n}>{n} หน่วย</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">ค่าคะแนนเก็บ</label>
+                  <select
+                    value={storedScore}
+                    onChange={(e) => handleStoredScoreChange(parseInt(e.target.value))}
+                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm bg-white"
+                  >
+                    {STORED_SCORE_OPTIONS.map(score => (
+                      <option key={score} value={score}>{score} คะแนน</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-5">
@@ -382,12 +477,12 @@ export const ScoreConfigModal: React.FC<Props> = ({ isOpen, onClose, generalInfo
             <div className="mt-6 flex justify-between items-center bg-gradient-to-r from-blue-50 to-blue-50 p-5 rounded-xl border border-blue-100 shadow-sm">
               <div className="text-sm text-blue-700 flex items-center">
                 <Sparkles size={16} className="mr-2" />
-                ระบบคำนวณคะแนนช่องสุดท้ายให้อัตโนมัติ เพื่อให้รวมได้ 70 คะแนนพอดี
+                ระบบกระจายคะแนนเริ่มต้นให้อัตโนมัติ และคำนวณช่องสุดท้ายให้รวมได้ {storedScore} คะแนนพอดี
               </div>
               <div className="font-bold text-xl flex items-center">
                 <span className="text-slate-600 mr-3">รวมคะแนนเต็ม:</span>
-                <span className={`px-3 py-1 rounded-lg ${calculateTotalScore() === 70 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                  {calculateTotalScore()} / 70
+                <span className={`px-3 py-1 rounded-lg ${calculateTotalScore() === storedScore ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {calculateTotalScore()} / {storedScore}
                 </span>
               </div>
             </div>

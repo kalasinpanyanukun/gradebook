@@ -140,7 +140,11 @@ function matchesCurriculumFilters(
     .includes(keyword);
 }
 
-export const CurriculumIndicatorsPage: React.FC = () => {
+interface CurriculumIndicatorsPageProps {
+  readOnly?: boolean;
+}
+
+export const CurriculumIndicatorsPage: React.FC<CurriculumIndicatorsPageProps> = ({ readOnly = false }) => {
   const [filterArea, setFilterArea] = useState(readInitialLearningArea);
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterGrade, setFilterGrade] = useState('all');
@@ -330,10 +334,12 @@ export const CurriculumIndicatorsPage: React.FC = () => {
           <h4 className="text-[22px] font-extrabold tracking-tight text-slate-900">หลักสูตรและตัวชี้วัด</h4>
           <p className="mt-1 text-sm text-slate-500">มาตรฐานและตัวชี้วัดรายวิชา</p>
         </div>
-        <button type="button" onClick={openAdd} className="btn btn-primary w-fit">
-          <Plus className="mr-2 h-4 w-4" />
-          เพิ่มตัวชี้วัด
-        </button>
+        {!readOnly && (
+          <button type="button" onClick={openAdd} className="btn btn-primary w-fit">
+            <Plus className="mr-2 h-4 w-4" />
+            เพิ่มตัวชี้วัด
+          </button>
+        )}
       </div>
 
       {message && (
@@ -380,7 +386,7 @@ export const CurriculumIndicatorsPage: React.FC = () => {
             แสดง {filteredRows.length.toLocaleString('th-TH')} รายการ
             {filterGrade !== 'all' ? ` · ${filterGrade}` : ''}
           </span>
-          {selectedCount > 0 ? (
+          {!readOnly && selectedCount > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-slate-500">
                 เลือกแล้ว {selectedCount.toLocaleString('th-TH')} / {filteredRows.length.toLocaleString('th-TH')} รายการ
@@ -415,6 +421,7 @@ export const CurriculumIndicatorsPage: React.FC = () => {
             onToggleAll={toggleAllFiltered}
             onEdit={openEdit}
             onDelete={setDeleteTarget}
+            readOnly={readOnly}
           />
         </div>
       </div>

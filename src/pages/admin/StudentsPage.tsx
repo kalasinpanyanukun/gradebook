@@ -117,6 +117,7 @@ interface StudentEditForm {
   title: string;
   firstName: string;
   lastName: string;
+  fullName: string;
   gender: GenderInput;
   studentNumber: string;
   classroomId: string;
@@ -149,6 +150,7 @@ const emptyStudentEditForm = (): StudentEditForm => ({
   title: '',
   firstName: '',
   lastName: '',
+  fullName: '',
   gender: '',
   studentNumber: '',
   classroomId: '',
@@ -168,6 +170,7 @@ function enrollmentToStudentEditForm(enrollment: EnrollmentRow): StudentEditForm
     title: student.title ?? '',
     firstName: student.first_name,
     lastName: student.last_name,
+    fullName: studentName(student),
     gender: (student.gender ?? '') as GenderInput,
     studentNumber: enrollment.student_number?.toString() ?? '',
     classroomId: enrollment.classroom_id,
@@ -343,6 +346,42 @@ export const StudentsPage: React.FC<StudentsPageProps> = ({ currentUser, initial
   useEffect(() => {
     void loadEnrollments();
   }, [loadEnrollments]);
+
+  useEffect(() => {
+    if (!currentUser.schoolId || !selectedYearId) return;
+
+    const channel = supabase
+      .channel(`admin-students-${selectedYearId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'students',
+          filter: `school_id=eq.${currentUser.schoolId}`,
+        },
+        () => {
+          void loadEnrollments();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'student_enrollments',
+          filter: `academic_year_id=eq.${selectedYearId}`,
+        },
+        () => {
+          void loadEnrollments();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser.schoolId, loadEnrollments, selectedYearId]);
 
   const classroomMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -624,7 +663,7 @@ export const StudentsPage: React.FC<StudentsPageProps> = ({ currentUser, initial
     const studentNumber = studentNumberText ? Number.parseInt(studentNumberText, 10) : null;
 
     if (!studentCode || !firstName || !lastName) {
-      setError('กรุณากรอกรหัสนักเรียน ชื่อ และนามสกุลให้ครบ');
+      setError('กรุณากรอกรหัสนักเรียน และชื่อนักเรียนให้ครบทั้งชื่อและนามสกุล');
       return;
     }
 
@@ -926,7 +965,12 @@ export const StudentsPage: React.FC<StudentsPageProps> = ({ currentUser, initial
                       <input
                         type="text"
                         value={studentEditForm.title}
-                        onChange={(event) => setStudentEditForm((form) => ({ ...form, title: event.target.value }))}
+                        onChange={(event) => setStudentEditForm((form) => ({
+                          ...form,
+                          title: event.target.value,
+                          fullName: [event.target.value, form.firstName, form.lastName].filter(Boolean).join(' '),
+                        }))}
+                        placeholder="เช่น เด็กชาย / เด็กหญิง"
                         className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                       />
                     </label>
@@ -947,7 +991,12 @@ export const StudentsPage: React.FC<StudentsPageProps> = ({ currentUser, initial
                       <input
                         type="text"
                         value={studentEditForm.firstName}
-                        onChange={(event) => setStudentEditForm((form) => ({ ...form, firstName: event.target.value }))}
+                        onChange={(event) => setStudentEditForm((form) => ({
+                          ...form,
+                          firstName: event.target.value,
+                          fullName: [form.title, event.target.value, form.lastName].filter(Boolean).join(' '),
+                        }))}
+                        placeholder="เช่น ธนทรัพย์"
                         className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                         required
                       />
@@ -957,7 +1006,12 @@ export const StudentsPage: React.FC<StudentsPageProps> = ({ currentUser, initial
                       <input
                         type="text"
                         value={studentEditForm.lastName}
-                        onChange={(event) => setStudentEditForm((form) => ({ ...form, lastName: event.target.value }))}
+                        onChange={(event) => setStudentEditForm((form) => ({
+                          ...form,
+                          lastName: event.target.value,
+                          fullName: [form.title, form.firstName, event.target.value].filter(Boolean).join(' '),
+                        }))}
+                        placeholder="เช่น โดนสอาด"
                         className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                         required
                       />

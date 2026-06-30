@@ -1,8 +1,79 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AppData, Student } from "../types";
-import { X, Upload, Download, Trash2, Plus } from "lucide-react";
+import { AlertTriangle, Check, Pencil, X, Upload, Download, Trash2, Plus } from "lucide-react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+
+const THAI_MONTHS_FULL = [
+  "มกราคม",
+  "กุมภาพันธ์",
+  "มีนาคม",
+  "เมษายน",
+  "พฤษภาคม",
+  "มิถุนายน",
+  "กรกฎาคม",
+  "สิงหาคม",
+  "กันยายน",
+  "ตุลาคม",
+  "พฤศจิกายน",
+  "ธันวาคม",
+];
+
+const STUDENT_NO_WIDTH = 48;
+const STUDENT_CODE_WIDTH = 128;
+const CITIZEN_ID_WIDTH = 180;
+const STUDENT_NAME_WIDTH = 292;
+const WEEK_LABEL_WIDTH = 64;
+const DAY_CELL_WIDTH = 24;
+const SUMMARY_CELL_WIDTH = 72;
+const RESULT_CELL_WIDTH = 84;
+const STUDENT_CODE_LEFT = STUDENT_NO_WIDTH;
+const CITIZEN_ID_LEFT = STUDENT_NO_WIDTH + STUDENT_CODE_WIDTH;
+const STUDENT_NAME_LEFT = CITIZEN_ID_LEFT + CITIZEN_ID_WIDTH;
+const WEEK_LABEL_LEFT = STUDENT_NAME_LEFT + STUDENT_NAME_WIDTH;
+
+function defaultStudyPeriod(generalInfo: AppData["generalInfo"]) {
+  const yearStr =
+    generalInfo.academicYear || new Date().getFullYear().toString();
+  const yearNum = parseInt(yearStr);
+  const gregorianYear = yearNum > 2500 ? yearNum - 543 : yearNum;
+
+  if (generalInfo.semester === "2") {
+    return {
+      startDate: `${gregorianYear}-10-16`,
+      endDate: `${gregorianYear + 1}-03-31`,
+    };
+  }
+
+  return {
+    startDate: `${gregorianYear}-05-16`,
+    endDate: `${gregorianYear}-09-30`,
+  };
+}
+
+function formatThaiDateText(value: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  return `วันที่ ${day} ${THAI_MONTHS_FULL[month - 1]} พ.ศ.${year + 543}`;
+}
+
+function formatThaiStudyPeriod(startDate: string, endDate: string) {
+  const start = formatThaiDateText(startDate);
+  const end = formatThaiDateText(endDate);
+  if (start && end) return `${start} ถึง ${end}`;
+  return start || end || "";
+}
+
+function fixedWidthStyle(width: number, left?: number): React.CSSProperties {
+  return {
+    ...(typeof left === "number" ? { left: `${left}px` } : {}),
+    width: `${width}px`,
+    minWidth: `${width}px`,
+    maxWidth: `${width}px`,
+  };
+}
 
 interface Props {
   data: AppData["students"];
@@ -11,6 +82,7 @@ interface Props {
   rosterLocked?: boolean;
   onChange: (data: AppData["students"]) => void;
   onAttendanceChange?: (attendance: AppData["attendance"]) => void;
+  onPersistStudentEdit?: (student: Student, previousStudent?: Student) => Promise<void>;
 }
 
 export const StudentsForm: React.FC<Props> = ({
@@ -20,8 +92,11 @@ export const StudentsForm: React.FC<Props> = ({
   rosterLocked = false,
   onChange,
   onAttendanceChange,
+  onPersistStudentEdit,
 }) => {
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<
+    "students" | "attendance" | null
+  >(null);
   const [studentMode, setStudentMode] = useState<"single" | "multiple">(
     "single",
   );
@@ -31,6 +106,14 @@ export const StudentsForm: React.FC<Props> = ({
     citizenId: "",
     name: "",
   });
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [studentDraft, setStudentDraft] = useState({
+    studentId: "",
+    citizenId: "",
+    name: "",
+    targetPercentage: 100,
+  });
+  const [savingStudentId, setSavingStudentId] = useState<string | null>(null);
   const [daysPerWeek, setDaysPerWeek] = useState(1);
   const [schedule, setSchedule] = useState([{ dayOfWeek: 1, hours: 1 }]);
   const [startDate, setStartDate] = useState("");
@@ -39,19 +122,38 @@ export const StudentsForm: React.FC<Props> = ({
     isOpen: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    confirmLabel?: string;
+    tone?: "danger" | "warning";
+    onConfirm: () => void | Promise<void>;
   }>({
     isOpen: false,
     title: "",
     message: "",
+    tone: "danger",
     onConfirm: () => {},
   });
 
   const currentHoursPerWeek = parseInt(generalInfo.totalHours) || 1;
   const currentTotalHours = currentHoursPerWeek * 20;
+  const fallbackStudyPeriod = useMemo(
+    () => defaultStudyPeriod(generalInfo),
+    [generalInfo.academicYear, generalInfo.semester],
+  );
+  const effectiveStudyStartDate =
+    generalInfo.studyStartDate ||
+    attendance?.settings?.startDate ||
+    fallbackStudyPeriod.startDate;
+  const effectiveStudyEndDate =
+    generalInfo.studyEndDate ||
+    attendance?.settings?.endDate ||
+    fallbackStudyPeriod.endDate;
+  const studyPeriodText = formatThaiStudyPeriod(
+    effectiveStudyStartDate,
+    effectiveStudyEndDate,
+  );
 
   useEffect(() => {
-    if (showEditModal) {
+    if (editModalMode === "attendance") {
       if (attendance?.settings) {
         let savedDaysPerWeek = attendance.settings.daysPerWeek || 1;
         let savedSchedule = attendance.settings.schedule || [
@@ -107,31 +209,24 @@ export const StudentsForm: React.FC<Props> = ({
 
         setDaysPerWeek(savedDaysPerWeek);
         setSchedule(savedSchedule);
-        setStartDate(attendance.settings.startDate || "");
-        setEndDate(attendance.settings.endDate || "");
+        setStartDate(effectiveStudyStartDate);
+        setEndDate(effectiveStudyEndDate);
       }
 
-      if (!attendance?.settings?.startDate && !attendance?.settings?.endDate) {
-        const yearStr =
-          generalInfo.academicYear || new Date().getFullYear().toString();
-        // Convert Buddhist year to Gregorian if needed (assuming > 2500 is Buddhist)
-        const yearNum = parseInt(yearStr);
-        const gregorianYear = yearNum > 2500 ? yearNum - 543 : yearNum;
-
-        if (generalInfo.semester === "1") {
-          setStartDate(`${gregorianYear}-05-16`);
-          setEndDate(`${gregorianYear}-09-30`);
-        } else if (generalInfo.semester === "2") {
-          setStartDate(`${gregorianYear}-10-16`);
-          setEndDate(`${gregorianYear + 1}-03-31`);
-        }
+      if (!attendance?.settings) {
+        setStartDate(effectiveStudyStartDate);
+        setEndDate(effectiveStudyEndDate);
       }
     }
   }, [
-    showEditModal,
+    editModalMode,
     attendance?.settings,
     generalInfo.semester,
     generalInfo.academicYear,
+    generalInfo.studyStartDate,
+    generalInfo.studyEndDate,
+    effectiveStudyStartDate,
+    effectiveStudyEndDate,
   ]);
 
   const getHoursFromText = (text: string) => {
@@ -158,6 +253,8 @@ export const StudentsForm: React.FC<Props> = ({
       title: "ยืนยันการล้างเวลาเรียน",
       message:
         "คุณต้องการล้างข้อมูลเวลาเรียนทั้งหมดใช่หรือไม่? (ข้อมูลรายชื่อนักเรียนจะยังคงอยู่)",
+      confirmLabel: "ยืนยันการล้าง",
+      tone: "danger",
       onConfirm: () => {
         if (onAttendanceChange) {
           onAttendanceChange({
@@ -179,6 +276,8 @@ export const StudentsForm: React.FC<Props> = ({
       title: "ยืนยันการล้างรายชื่อนักเรียน",
       message:
         "คุณต้องการลบรายชื่อนักเรียนทั้งหมดใช่หรือไม่? (การกระทำนี้ไม่สามารถย้อนกลับได้)",
+      confirmLabel: "ยืนยันการลบ",
+      tone: "danger",
       onConfirm: () => {
         onChange([]);
         if (onAttendanceChange) {
@@ -190,11 +289,6 @@ export const StudentsForm: React.FC<Props> = ({
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
-  };
-
-  const handleChange = (id: string, field: keyof Student, value: string) => {
-    if (rosterLocked) return;
-    onChange(data.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
   };
 
   const handleAttendanceChange = (
@@ -276,20 +370,147 @@ export const StudentsForm: React.FC<Props> = ({
     }
   };
 
-  const handleGenerateAttendance = () => {
-    let currentStudents = [...data];
+  const handleAddStudentRow = () => {
+    if (rosterLocked) return;
 
-    if (!rosterLocked && studentMode === "single" && newStudent.name) {
-      const newId = Date.now().toString();
-      currentStudents.push({
-        id: newId,
-        studentId: newStudent.studentId,
-        citizenId: newStudent.citizenId,
-        name: newStudent.name,
-      });
-      onChange(currentStudents);
-      setNewStudent({ number: "", studentId: "", citizenId: "", name: "" });
+    const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const nextStudent: Student = {
+      id: newId,
+      studentId: "",
+      citizenId: "",
+      name: "",
+      targetPercentage: 100,
+    };
+
+    onChange([...data, nextStudent]);
+    setEditingStudentId(newId);
+    setStudentDraft({
+      studentId: "",
+      citizenId: "",
+      name: "",
+      targetPercentage: 100,
+    });
+  };
+
+  const beginEditStudent = (student: Student) => {
+    if (rosterLocked) return;
+    setEditingStudentId(student.id);
+    setStudentDraft({
+      studentId: student.studentId || "",
+      citizenId: student.citizenId || "",
+      name: student.name || "",
+      targetPercentage: student.targetPercentage ?? 100,
+    });
+  };
+
+  const hasAcademicStudentChanges = (current: Student, next: Student) => {
+    return (
+      (current.studentId || "").trim() !== (next.studentId || "").trim() ||
+      (current.citizenId || "").trim() !== (next.citizenId || "").trim() ||
+      (current.name || "").trim() !== (next.name || "").trim()
+    );
+  };
+
+  const commitStudentDraft = async ({
+    confirmed = false,
+    closeModalAfterSave = false,
+  }: { confirmed?: boolean; closeModalAfterSave?: boolean } = {}) => {
+    if (!editingStudentId || rosterLocked) return true;
+
+    const editingIndex = data.findIndex((student) => student.id === editingStudentId);
+    if (editingIndex < 0) {
+      setEditingStudentId(null);
+      return true;
     }
+
+    const updatedStudent: Student = {
+      ...data[editingIndex],
+      studentId: studentDraft.studentId,
+      citizenId: studentDraft.citizenId,
+      name: studentDraft.name,
+      targetPercentage: studentDraft.targetPercentage,
+    };
+
+    if (!confirmed && hasAcademicStudentChanges(data[editingIndex], updatedStudent)) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "ยืนยันการอัปเดตข้อมูลนักเรียน",
+        message:
+          `ต้องการบันทึกการแก้ไขข้อมูลของ "${data[editingIndex].name || updatedStudent.name}" ใช่หรือไม่?\n\n` +
+          "ระบบจะอัปเดตชื่อ รหัสนักเรียน หรือเลขประจำตัวประชาชนไปยังข้อมูลวิชาการและหน้าผู้ดูแลระบบด้วย",
+        confirmLabel: "ยืนยันบันทึก",
+        tone: "warning",
+        onConfirm: async () => {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+          const saved = await commitStudentDraft({
+            confirmed: true,
+            closeModalAfterSave,
+          });
+          if (saved && closeModalAfterSave) {
+            setEditModalMode(null);
+          }
+        },
+      });
+      return false;
+    }
+
+    setSavingStudentId(editingStudentId);
+    try {
+      await onPersistStudentEdit?.(updatedStudent, data[editingIndex]);
+      onChange(data.map((student, index) => (index === editingIndex ? updatedStudent : student)));
+      setEditingStudentId(null);
+      if (closeModalAfterSave) {
+        setEditModalMode(null);
+      }
+      return true;
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกข้อมูลนักเรียนไปยังข้อมูลวิชาการได้",
+      );
+      return false;
+    } finally {
+      setSavingStudentId(null);
+    }
+  };
+
+  const saveStudentDraft = () => {
+    void commitStudentDraft();
+  };
+
+  const handleSaveStudentsModal = async () => {
+    if (editingStudentId && !rosterLocked) {
+      const saved = await commitStudentDraft({ closeModalAfterSave: true });
+      if (!saved) return;
+    }
+    setEditModalMode(null);
+  };
+
+  const deleteStudent = (studentId: string, studentIndex: number) => {
+    if (rosterLocked) return;
+    const targetId = data[studentIndex]?.id || studentId;
+    onChange(
+      data.filter((student, index) => {
+        if (index === studentIndex) return false;
+        return targetId ? student.id !== targetId : true;
+      }),
+    );
+    if (onAttendanceChange) {
+      const nextRecords = { ...(attendance?.records || {}) };
+      if (targetId) delete nextRecords[targetId];
+      onAttendanceChange({
+        ...attendance,
+        records: nextRecords,
+      });
+    }
+    if (editingStudentId === targetId) {
+      setEditingStudentId(null);
+    }
+  };
+
+  const handleGenerateAttendance = () => {
+    const currentStudents = [...data];
 
     const parseDate = (dateString: string) => {
       if (!dateString) return new Date(0);
@@ -431,7 +652,7 @@ export const StudentsForm: React.FC<Props> = ({
       });
     }
 
-    setShowEditModal(false);
+    setEditModalMode(null);
   };
 
   // Generate 20 weeks
@@ -511,10 +732,66 @@ export const StudentsForm: React.FC<Props> = ({
     };
   }, [generalInfo.academicYear, generalInfo.semester]);
 
+  const confirmationDialogPortal = confirmDialog.isOpen
+    ? createPortal(
+        <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center bg-slate-900/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="p-6">
+              <div
+                className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                  confirmDialog.tone === "warning"
+                    ? "bg-amber-100 text-amber-600"
+                    : "bg-red-100 text-red-600"
+                }`}
+              >
+                {confirmDialog.tone === "warning" ? (
+                  <AlertTriangle size={24} />
+                ) : (
+                  <Trash2 size={24} />
+                )}
+              </div>
+              <h3 className="mb-2 text-xl font-bold text-slate-900">
+                {confirmDialog.title}
+              </h3>
+              <p className="whitespace-pre-line text-slate-600">
+                {confirmDialog.message}
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setConfirmDialog((prev) => ({
+                    ...prev,
+                    isOpen: false,
+                  }))
+                }
+                className="rounded-lg px-4 py-2 font-medium text-slate-700 transition-colors hover:bg-slate-200"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDialog.onConfirm()}
+                className={`rounded-lg px-4 py-2 font-medium text-white shadow-sm transition-colors ${
+                  confirmDialog.tone === "warning"
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {confirmDialog.confirmLabel ?? "ยืนยัน"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
-    <div className="flex justify-center rounded-2xl bg-slate-100/90 p-4 sm:p-6 overflow-auto">
+    <div className="w-full overflow-auto">
       <div
-        className="bg-white p-10 w-full rounded-lg ring-1 ring-slate-200/80 shadow-[0_12px_32px_-8px_rgb(15,23,42,0.12)]"
+        className="w-full bg-white p-4 sm:p-6"
         style={{ fontFamily: "Sarabun" }}
       >
         <div className="mb-4 text-center">
@@ -527,63 +804,49 @@ export const StudentsForm: React.FC<Props> = ({
             รวมเวลาเรียน {generalInfo.totalHours} ชั่วโมง/สัปดาห์{" "}
             {generalInfo.hoursPerSemester} ชั่วโมงภาคเรียน
           </h3>
+          {studyPeriodText && (
+            <p className="mt-2 text-sm font-semibold text-slate-600">
+              {studyPeriodText}
+            </p>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="excel-table whitespace-nowrap w-full relative">
+        <div className="excel-scroll-area overflow-x-auto">
+          <div className="excel-scroll-content">
+          <table className="excel-table whitespace-nowrap relative" style={{ width: "max-content", minWidth: "max-content" }}>
             <thead>
               <tr>
                 <th
                   rowSpan={4}
                   className="bg-orange-excel sticky left-0 z-20"
-                  style={{ width: "40px", minWidth: "40px", maxWidth: "40px" }}
+                  style={fixedWidthStyle(STUDENT_NO_WIDTH)}
                 >
                   เลขที่
                 </th>
                 <th
                   rowSpan={4}
                   className="bg-orange-excel sticky z-20"
-                  style={{
-                    left: "40px",
-                    width: "96px",
-                    minWidth: "96px",
-                    maxWidth: "96px",
-                  }}
+                  style={fixedWidthStyle(STUDENT_CODE_WIDTH, STUDENT_CODE_LEFT)}
                 >
                   เลขประจำตัว
                 </th>
                 <th
                   rowSpan={4}
                   className="bg-orange-excel sticky z-20"
-                  style={{
-                    left: "136px",
-                    width: "128px",
-                    minWidth: "128px",
-                    maxWidth: "128px",
-                  }}
+                  style={fixedWidthStyle(CITIZEN_ID_WIDTH, CITIZEN_ID_LEFT)}
                 >
                   เลขประจำตัวประชาชน
                 </th>
                 <th
                   rowSpan={4}
                   className="bg-orange-excel sticky z-20"
-                  style={{
-                    left: "264px",
-                    width: "250px",
-                    minWidth: "250px",
-                    maxWidth: "250px",
-                  }}
+                  style={fixedWidthStyle(STUDENT_NAME_WIDTH, STUDENT_NAME_LEFT)}
                 >
                   ชื่อ - สกุล
                 </th>
                 <th
                   className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400"
-                  style={{
-                    left: "514px",
-                    width: "64px",
-                    minWidth: "64px",
-                    maxWidth: "64px",
-                  }}
+                  style={fixedWidthStyle(WEEK_LABEL_WIDTH, WEEK_LABEL_LEFT)}
                 >
                   สัปดาห์ที่
                 </th>
@@ -595,7 +858,7 @@ export const StudentsForm: React.FC<Props> = ({
                 <th colSpan={2} className="bg-orange-excel">
                   รวมเวลาเรียนตลอดปี
                 </th>
-                <th rowSpan={4} className="bg-orange-excel">
+                <th rowSpan={4} className="bg-orange-excel" style={fixedWidthStyle(RESULT_CELL_WIDTH)}>
                   สรุปผล
                   <br />
                   การประเมิน
@@ -604,12 +867,7 @@ export const StudentsForm: React.FC<Props> = ({
               <tr>
                 <th
                   className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400"
-                  style={{
-                    left: "514px",
-                    width: "64px",
-                    minWidth: "64px",
-                    maxWidth: "64px",
-                  }}
+                  style={fixedWidthStyle(WEEK_LABEL_WIDTH, WEEK_LABEL_LEFT)}
                 >
                   เดือน
                 </th>
@@ -620,7 +878,7 @@ export const StudentsForm: React.FC<Props> = ({
                       <th
                         key={`month-${w}`}
                         colSpan={5}
-                        className="bg-orange-excel text-[10px]"
+                        className="bg-orange-excel text-[11.5px]"
                       ></th>
                     );
                   const startMonth = weekDates[0].getMonth();
@@ -633,24 +891,19 @@ export const StudentsForm: React.FC<Props> = ({
                     <th
                       key={`month-${w}`}
                       colSpan={5}
-                      className="bg-orange-excel text-[10px]"
+                      className="bg-orange-excel text-[11.5px]"
                     >
                       {monthText}
                     </th>
                   );
                 })}
-                <th className="bg-orange-excel">ชั่วโมง</th>
-                <th className="bg-orange-excel">มาเรียน%</th>
+                <th className="bg-orange-excel" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>ชั่วโมง</th>
+                <th className="bg-orange-excel" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>มาเรียน%</th>
               </tr>
               <tr>
                 <th
                   className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400"
-                  style={{
-                    left: "514px",
-                    width: "64px",
-                    minWidth: "64px",
-                    maxWidth: "64px",
-                  }}
+                  style={fixedWidthStyle(WEEK_LABEL_WIDTH, WEEK_LABEL_LEFT)}
                 >
                   วันที่
                 </th>
@@ -669,8 +922,8 @@ export const StudentsForm: React.FC<Props> = ({
                         return (
                           <th
                             key={i}
-                            className={`text-[10px] ${isHoliday ? "bg-[#CCFFFF]" : "bg-orange-excel"}`}
-                            style={{ minWidth: "24px" }}
+                            className={`text-[11.5px] ${isHoliday ? "bg-[#CCFFFF]" : "bg-orange-excel"}`}
+                            style={fixedWidthStyle(DAY_CELL_WIDTH)}
                           >
                             {date.getDate()}
                           </th>
@@ -679,18 +932,13 @@ export const StudentsForm: React.FC<Props> = ({
                     </React.Fragment>
                   );
                 })}
-                <th className="bg-white font-bold">{currentTotalHours}</th>
-                <th className="bg-white font-bold">100</th>
+                <th className="bg-white font-bold" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>{currentTotalHours}</th>
+                <th className="bg-white font-bold" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>100</th>
               </tr>
               <tr>
                 <th
                   className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400"
-                  style={{
-                    left: "514px",
-                    width: "64px",
-                    minWidth: "64px",
-                    maxWidth: "64px",
-                  }}
+                  style={fixedWidthStyle(WEEK_LABEL_WIDTH, WEEK_LABEL_LEFT)}
                 >
                   ชั่วโมงที่
                 </th>
@@ -711,6 +959,7 @@ export const StudentsForm: React.FC<Props> = ({
                           <th
                             key={i}
                             className={`text-[10px] ${isHoliday ? "bg-[#CCFFFF]" : "bg-orange-excel"}`}
+                            style={fixedWidthStyle(DAY_CELL_WIDTH)}
                           >
                             {!isHoliday && hourText}
                           </th>
@@ -719,10 +968,10 @@ export const StudentsForm: React.FC<Props> = ({
                     </React.Fragment>
                   );
                 })}
-                <th className="bg-white font-bold text-blue-600">
+                <th className="bg-white font-bold text-blue-600" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>
                   {totalScheduledHours}
                 </th>
-                <th className="bg-white font-bold text-blue-600">
+                <th className="bg-white font-bold text-blue-600" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>
                   {scheduledPercentage}
                 </th>
               </tr>
@@ -754,102 +1003,37 @@ export const StudentsForm: React.FC<Props> = ({
                     <tr key={student.id}>
                       <td
                         className="text-center sticky left-0 z-10 bg-white"
-                        style={{
-                          width: "40px",
-                          minWidth: "40px",
-                          maxWidth: "40px",
-                        }}
+                        style={fixedWidthStyle(STUDENT_NO_WIDTH)}
                       >
                         {index + 1}
                       </td>
                       <td
                         className="sticky z-10 bg-white"
-                        style={{
-                          left: "40px",
-                          width: "96px",
-                          minWidth: "96px",
-                          maxWidth: "96px",
-                        }}
+                        style={fixedWidthStyle(STUDENT_CODE_WIDTH, STUDENT_CODE_LEFT)}
                       >
-                        {rosterLocked ? (
-                          <div className="px-1 text-center">
-                            {student.studentId}
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            className="excel-input text-center w-full"
-                            value={student.studentId}
-                            onChange={(e) =>
-                              handleChange(
-                                student.id,
-                                "studentId",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        )}
+                        <div className="px-1 text-center">
+                          {student.studentId}
+                        </div>
                       </td>
                       <td
                         className="sticky z-10 bg-white"
-                        style={{
-                          left: "136px",
-                          width: "128px",
-                          minWidth: "128px",
-                          maxWidth: "128px",
-                        }}
+                        style={fixedWidthStyle(CITIZEN_ID_WIDTH, CITIZEN_ID_LEFT)}
                       >
-                        {rosterLocked ? (
-                          <div className="px-1 text-center">
-                            {student.citizenId || ""}
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            className="excel-input text-center w-full"
-                            value={student.citizenId || ""}
-                            onChange={(e) =>
-                              handleChange(
-                                student.id,
-                                "citizenId",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        )}
+                        <div className="px-1 text-center">
+                          {student.citizenId || ""}
+                        </div>
                       </td>
                       <td
                         className="sticky z-10 bg-white"
-                        style={{
-                          left: "264px",
-                          width: "250px",
-                          minWidth: "250px",
-                          maxWidth: "250px",
-                        }}
+                        style={fixedWidthStyle(STUDENT_NAME_WIDTH, STUDENT_NAME_LEFT)}
                       >
-                        {rosterLocked ? (
-                          <div className="px-2 text-left truncate">
-                            {student.name}
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            className="excel-input text-left px-2 w-full"
-                            value={student.name}
-                            onChange={(e) =>
-                              handleChange(student.id, "name", e.target.value)
-                            }
-                          />
-                        )}
+                        <div className="px-2 text-left truncate">
+                          {student.name}
+                        </div>
                       </td>
                       <td
                         className="bg-slate-50 sticky z-10 border-r-2 border-r-slate-400"
-                        style={{
-                          left: "514px",
-                          width: "64px",
-                          minWidth: "64px",
-                          maxWidth: "64px",
-                        }}
+                        style={fixedWidthStyle(WEEK_LABEL_WIDTH, WEEK_LABEL_LEFT)}
                       ></td>
                       {dates.map((date, i) => {
                         const monthStr = String(date.getMonth() + 1).padStart(
@@ -867,6 +1051,7 @@ export const StudentsForm: React.FC<Props> = ({
                                 key={i}
                                 rowSpan={Math.max(12, data.length)}
                                 className="bg-[#CCFFFF] align-middle p-0 border-x border-slate-300"
+                                style={fixedWidthStyle(DAY_CELL_WIDTH)}
                               >
                                 <div
                                   className="flex justify-center items-center h-full"
@@ -892,7 +1077,7 @@ export const StudentsForm: React.FC<Props> = ({
                           attendance?.records?.[student.id]?.[dateKey] || "";
 
                         return (
-                          <td key={i} className="p-0">
+                          <td key={i} className="p-0" style={fixedWidthStyle(DAY_CELL_WIDTH)}>
                             <input
                               type="text"
                               className="excel-input w-full h-full text-center"
@@ -908,11 +1093,11 @@ export const StudentsForm: React.FC<Props> = ({
                           </td>
                         );
                       })}
-                      <td className="text-center font-bold">{attendedHours}</td>
-                      <td className="text-center font-bold">
+                      <td className="text-center font-bold" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>{attendedHours}</td>
+                      <td className="text-center font-bold" style={fixedWidthStyle(SUMMARY_CELL_WIDTH)}>
                         {attendancePercentage}
                       </td>
-                      <td className="text-center font-bold text-green-600">
+                      <td className="text-center font-bold text-green-600" style={fixedWidthStyle(RESULT_CELL_WIDTH)}>
                         {attendedHours >= currentTotalHours * 0.8 ? "ผ" : "มผ"}
                       </td>
                     </tr>
@@ -933,36 +1118,53 @@ export const StudentsForm: React.FC<Props> = ({
             </tbody>
           </table>
         </div>
+        </div>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <button
-            onClick={() => setShowEditModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 font-bold text-lg"
+            type="button"
+            onClick={() => setEditModalMode("students")}
+            className="rounded-lg bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow transition hover:bg-blue-700"
           >
-            แก้ไขข้อมูล
+            แก้ไขรายชื่อนักเรียน
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditModalMode("attendance")}
+            className="rounded-lg bg-slate-900 px-6 py-3 text-lg font-bold text-white shadow transition hover:bg-slate-800"
+          >
+            ระบบช่วยลงเวลาเรียน
           </button>
         </div>
 
-        {showEditModal && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-white z-10">
-                <h3 className="text-2xl font-bold text-slate-800">
-                  แก้ไขข้อมูล
-                </h3>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 hover:bg-slate-200 rounded-full p-2"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+        {editModalMode &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-900/50 px-4 py-8 backdrop-blur-sm sm:py-10">
+              <div className="flex min-h-full items-start justify-center">
+                <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                  <div className="grid grid-cols-[40px_1fr_40px] items-center gap-3 border-b border-slate-100 bg-white p-6">
+                    <span aria-hidden="true" />
+                    <h3 className="text-center text-2xl font-bold text-slate-800">
+                      {editModalMode === "students"
+                        ? "แก้ไขรายชื่อนักเรียน"
+                        : "ระบบช่วยลงเวลาเรียน"}
+                    </h3>
+                    <button
+                      type="button"
+                      aria-label="ปิดหน้าต่าง"
+                      onClick={() => setEditModalMode(null)}
+                      className="justify-self-end rounded-full bg-slate-100 p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
 
-              <div className="p-8 overflow-y-auto space-y-10">
-                {/* 1. รายชื่อนักเรียน */}
-                <section>
-                  <h4 className="font-bold text-lg text-slate-800 border-b border-slate-200 pb-3 mb-5">
-                    1. รายชื่อนักเรียน
+              <div className="space-y-10 p-6 sm:p-8">
+                {/* รายชื่อนักเรียน */}
+                <section className={editModalMode === "students" ? "" : "hidden"}>
+                  <h4 className="border-b border-slate-200 pb-3 mb-5 text-center text-lg font-bold text-slate-800">
+                    รายชื่อนักเรียน
                   </h4>
                   {rosterLocked ? (
                     <div className="bg-amber-50 border border-amber-100 text-amber-800 px-4 py-3 rounded-xl mb-6">
@@ -1000,7 +1202,7 @@ export const StudentsForm: React.FC<Props> = ({
 
                       {studentMode === "single" ? (
                         <div className="flex flex-col gap-4 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                          <div className="grid grid-cols-4 gap-6 items-end">
+                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[88px_150px_230px_minmax(260px,1fr)] lg:items-end">
                             <div>
                               <label className="block text-sm font-medium text-slate-700 mb-2">
                                 เลขที่
@@ -1069,13 +1271,14 @@ export const StudentsForm: React.FC<Props> = ({
                               />
                             </div>
                           </div>
-                          <div className="flex justify-end mt-2">
+                          <div className="flex justify-center mt-2">
                             <button
+                              type="button"
                               onClick={handleAddSingleStudent}
                               disabled={!newStudent.name}
                               className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <Plus size={18} /> เพิ่มนักเรียน
+                              <Plus size={18} /> เพิ่มนักเรียนใหม่
                             </button>
                           </div>
                         </div>
@@ -1105,14 +1308,14 @@ export const StudentsForm: React.FC<Props> = ({
 
                   {data.length > 0 && (
                     <div className="mt-6 border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
                         <h5 className="font-medium text-slate-700">
                           รายชื่อนักเรียนที่เพิ่มแล้ว ({data.length} คน)
                         </h5>
                       </div>
-                      <div className="max-h-48 overflow-y-auto">
+                      <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                          <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
+                          <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                             <tr>
                               <th className="px-4 py-2 w-16 text-center">
                                 ลำดับ
@@ -1124,14 +1327,17 @@ export const StudentsForm: React.FC<Props> = ({
                                 เป้าหมายเวลาเรียน (%)
                               </th>
                               {!rosterLocked && (
-                                <th className="px-4 py-2 w-16 text-center">
-                                  ลบ
+                                <th className="px-4 py-2 w-28 text-center">
+                                  จัดการ
                                 </th>
                               )}
                             </tr>
                           </thead>
                           <tbody>
-                            {data.map((student, idx) => (
+                            {data.map((student, idx) => {
+                              const isEditing = editingStudentId === student.id;
+
+                              return (
                               <tr
                                 key={student.id}
                                 className="border-b border-slate-100 hover:bg-slate-50"
@@ -1140,12 +1346,56 @@ export const StudentsForm: React.FC<Props> = ({
                                   {idx + 1}
                                 </td>
                                 <td className="px-4 py-2">
-                                  {student.studentId}
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      className="w-full min-w-[100px] rounded border border-slate-300 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentDraft.studentId}
+                                      onChange={(e) =>
+                                        setStudentDraft((draft) => ({
+                                          ...draft,
+                                          studentId: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  ) : (
+                                    student.studentId
+                                  )}
                                 </td>
                                 <td className="px-4 py-2">
-                                  {student.citizenId}
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      className="w-full min-w-[150px] rounded border border-slate-300 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentDraft.citizenId}
+                                      onChange={(e) =>
+                                        setStudentDraft((draft) => ({
+                                          ...draft,
+                                          citizenId: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  ) : (
+                                    student.citizenId
+                                  )}
                                 </td>
-                                <td className="px-4 py-2">{student.name}</td>
+                                <td className="px-4 py-2">
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      className="w-full min-w-[220px] rounded border border-slate-300 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentDraft.name}
+                                      onChange={(e) =>
+                                        setStudentDraft((draft) => ({
+                                          ...draft,
+                                          name: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  ) : (
+                                    student.name
+                                  )}
+                                </td>
                                 <td className="px-4 py-2 text-center">
                                   <div className="flex items-center justify-center gap-1">
                                     <input
@@ -1153,22 +1403,33 @@ export const StudentsForm: React.FC<Props> = ({
                                       min="0"
                                       max="100"
                                       className="w-16 border border-slate-300 rounded p-1 text-center focus:ring-2 focus:ring-blue-500 outline-none"
-                                      value={student.targetPercentage ?? 100}
+                                      value={
+                                        isEditing
+                                          ? studentDraft.targetPercentage
+                                          : student.targetPercentage ?? 100
+                                      }
                                       onChange={(e) => {
                                         const val = parseInt(e.target.value);
                                         const newTarget = isNaN(val)
                                           ? 100
                                           : val;
-                                        onChange(
-                                          data.map((s) =>
-                                            s.id === student.id
-                                              ? {
-                                                  ...s,
-                                                  targetPercentage: newTarget,
-                                                }
-                                              : s,
-                                          ),
-                                        );
+                                        if (isEditing) {
+                                          setStudentDraft((draft) => ({
+                                            ...draft,
+                                            targetPercentage: newTarget,
+                                          }));
+                                        } else {
+                                          onChange(
+                                            data.map((s) =>
+                                              s.id === student.id
+                                                ? {
+                                                    ...s,
+                                                    targetPercentage: newTarget,
+                                                  }
+                                                : s,
+                                            ),
+                                          );
+                                        }
                                       }}
                                     />
                                     <span className="text-slate-500">%</span>
@@ -1176,22 +1437,41 @@ export const StudentsForm: React.FC<Props> = ({
                                 </td>
                                 {!rosterLocked && (
                                   <td className="px-4 py-2 text-center">
-                                    <button
-                                      onClick={() =>
-                                        onChange(
-                                          data.filter(
-                                            (s) => s.id !== student.id,
-                                          ),
-                                        )
-                                      }
-                                      className="text-red-500 hover:text-red-700"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
+                                    <div className="flex items-center justify-center gap-2">
+                                      {isEditing ? (
+                                        <button
+                                          type="button"
+                                          onClick={saveStudentDraft}
+                                          disabled={savingStudentId === student.id}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                                          title="บันทึก"
+                                        >
+                                          <Check size={16} />
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => beginEditStudent(student)}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+                                          title="แก้ไข"
+                                        >
+                                          <Pencil size={16} />
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteStudent(student.id, idx)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600 ring-1 ring-red-100 transition hover:bg-red-100"
+                                        title="ลบ"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
                                   </td>
                                 )}
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -1199,10 +1479,10 @@ export const StudentsForm: React.FC<Props> = ({
                   )}
                 </section>
 
-                {/* 2. จำนวนวันที่เรียน/สัปดาห์ */}
-                <section>
+                {/* 1. จำนวนวันที่เรียน/สัปดาห์ */}
+                <section className={editModalMode === "attendance" ? "" : "hidden"}>
                   <h4 className="font-bold text-lg text-slate-800 border-b border-slate-200 pb-3 mb-5">
-                    2. วันที่เรียน
+                    1. วันที่เรียน
                   </h4>
                   <div className="flex items-center gap-4 mb-6">
                     <label className="w-48 text-slate-700 font-medium">
@@ -1359,10 +1639,10 @@ export const StudentsForm: React.FC<Props> = ({
                   </div>
                 </section>
 
-                {/* 3. เวลาเรียน ชั่วโมง/สัปดาห์ */}
-                <section>
+                {/* 2. เวลาเรียน ชั่วโมง/สัปดาห์ */}
+                <section className={editModalMode === "attendance" ? "" : "hidden"}>
                   <h4 className="font-bold text-lg text-slate-800 border-b border-slate-200 pb-3 mb-5">
-                    3. เวลาเรียน
+                    2. เวลาเรียน
                   </h4>
                   <div className="flex items-center gap-4 mb-4">
                     <label className="w-48 text-slate-700 font-medium">
@@ -1375,76 +1655,33 @@ export const StudentsForm: React.FC<Props> = ({
                       (อ้างอิงจากข้อมูลหน้าปก)
                     </span>
                   </div>
-                  <div className="text-blue-700 bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
-                    <div className="bg-blue-100 p-2 rounded-full">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                      </svg>
-                    </div>
-                    <span>
-                      ระบบคำนวณอัตโนมัติ: เวลาเรียน{" "}
-                      <strong className="text-lg">{currentTotalHours}</strong>{" "}
-                      ชั่วโมง/ภาคเรียน (กำหนด 1 ภาคเรียนมี 20 สัปดาห์)
-                    </span>
-                  </div>
-                </section>
-
-                {/* 4. เริ่มต้นเรียนตั้งแต่วันที่ */}
-                <section>
-                  <h4 className="font-bold text-lg text-slate-800 border-b border-slate-200 pb-3 mb-5">
-                    4. ระยะเวลาเรียน
-                  </h4>
-                  <div className="flex items-center gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <label className="font-medium text-slate-700">
-                        เริ่มต้นวันที่:
-                      </label>
-                      <input
-                        type="date"
-                        className="border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="font-medium text-slate-700">
-                        ถึงวันที่:
-                      </label>
-                      <input
-                        type="date"
-                        className="border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                      />
+                  <div className="flex flex-wrap items-center gap-4">
+                    <label className="w-48 text-slate-700 font-medium">
+                      ระยะเวลาเรียน:
+                    </label>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 font-bold text-slate-800">
+                      {studyPeriodText || "ยังไม่ได้กำหนดระยะเวลาเรียน"}
                     </div>
                   </div>
                 </section>
               </div>
 
-              <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center rounded-b-2xl mt-auto">
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleClearAttendance}
-                    className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors text-sm"
-                  >
-                    <Trash2 size={16} /> ล้างเวลาเรียน
-                  </button>
-                  {!rosterLocked && (
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-3">
+                  {editModalMode === "attendance" && (
                     <button
+                      type="button"
+                      onClick={handleClearAttendance}
+                      className="flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <Trash2 size={16} /> ล้างเวลาเรียน
+                    </button>
+                  )}
+                  {editModalMode === "students" && !rosterLocked && (
+                    <button
+                      type="button"
                       onClick={handleClearStudents}
-                      className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
                     >
                       <Trash2 size={16} /> ล้างรายชื่อนักเรียน
                     </button>
@@ -1452,58 +1689,39 @@ export const StudentsForm: React.FC<Props> = ({
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowEditModal(false)}
-                    className="px-6 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-100 transition-colors"
+                    type="button"
+                    onClick={
+                      editModalMode === "students"
+                        ? handleSaveStudentsModal
+                        : () => setEditModalMode(null)
+                    }
+                    disabled={Boolean(savingStudentId)}
+                    className={
+                      editModalMode === "students"
+                        ? "rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        : "rounded-lg border border-slate-300 px-6 py-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                    }
                   >
-                    ยกเลิก
+                    {editModalMode === "students" ? "บันทึกข้อมูล" : "ยกเลิก"}
                   </button>
-                  <button
-                    onClick={handleGenerateAttendance}
-                    className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                  >
-                    บันทึกและสร้างตาราง
-                  </button>
+                  {editModalMode === "attendance" && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateAttendance}
+                      className="rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+                    >
+                      บันทึกและสร้างตาราง
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Confirmation Dialog */}
-              {confirmDialog.isOpen && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
-                    <div className="p-6">
-                      <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                        <Trash2 className="text-red-600" size={24} />
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2">
-                        {confirmDialog.title}
-                      </h3>
-                      <p className="text-slate-600">{confirmDialog.message}</p>
-                    </div>
-                    <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3 border-t border-slate-100">
-                      <button
-                        onClick={() =>
-                          setConfirmDialog((prev) => ({
-                            ...prev,
-                            isOpen: false,
-                          }))
-                        }
-                        className="px-4 py-2 text-slate-700 font-medium hover:bg-slate-200 rounded-lg transition-colors"
-                      >
-                        ยกเลิก
-                      </button>
-                      <button
-                        onClick={confirmDialog.onConfirm}
-                        className="px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 rounded-lg transition-colors shadow-sm"
-                      >
-                        ยืนยันการลบ
-                      </button>
-                    </div>
-                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            </div>,
+            document.body,
+          )}
+        {confirmationDialogPortal}
       </div>
     </div>
   );

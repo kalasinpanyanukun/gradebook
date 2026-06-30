@@ -12,6 +12,7 @@ export const ADMIN_TAB_IDS = [
   'settings-activity',
   'settings-system',
   'learning-area-heads',
+  'student-roster-edits',
 ] as const;
 
 export type AdminTabId = (typeof ADMIN_TAB_IDS)[number];

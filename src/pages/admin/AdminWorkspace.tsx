@@ -28,7 +28,8 @@ import { TeachersPage } from './TeachersPage';
 import { GradebookSearchPage } from './GradebookSearchPage';
 import { SettingsPage, type SettingsSection } from './SettingsPage';
 import { LearningAreaHeadsPage } from './LearningAreaHeadsPage';
-import { canAccessAdminDashboard, isAdminReadOnly } from '../../lib/auth';
+import { StudentRosterEditsPage } from './StudentRosterEditsPage';
+import { canAccessAdminDashboard, isAdminReadOnly, ROLE_LABELS } from '../../lib/auth';
 import {
   clearAdminTabFromUrl,
   persistWorkspaceYear,
@@ -54,7 +55,8 @@ type AdminTab =
   | 'settings-general'
   | 'settings-activity'
   | 'settings-system'
-  | 'learning-area-heads';
+  | 'learning-area-heads'
+  | 'student-roster-edits';
 
 interface AdminWorkspaceProps {
   currentUser: AppUser;
@@ -79,6 +81,7 @@ const adminTabs: Array<{
   { id: 'classrooms', label: 'ห้องเรียน', description: 'ห้องและครูประจำชั้น', icon: School },
   { id: 'students', label: 'นักเรียน', description: 'รายชื่อและการย้ายห้อง', icon: Users },
   { id: 'learning-area-heads', label: 'หัวหน้ากลุ่มสาระ', description: 'ผู้ลงนามหน้าปก ปพ.5', icon: UserCheck },
+  { id: 'student-roster-edits', label: 'การแก้ไขข้อมูลนักเรียน', description: 'รายชื่อที่ครูแก้ในสมุด ปพ.5', icon: Users },
   { id: 'academic-admins', label: 'บทบาทและผู้ใช้งาน', description: 'บัญชีและสิทธิ์ใช้งาน', icon: ShieldCheck },
   { id: 'subjects', label: 'รายวิชา', description: 'รหัสวิชาและกลุ่มสาระ', icon: BookOpen },
   { id: 'curriculum', label: 'หลักสูตรและตัวชี้วัด', description: 'มาตรฐานและตัวชี้วัดรายวิชา', icon: BookMarked },
@@ -92,7 +95,7 @@ const adminNavGroups: Array<{
   items: AdminTab[];
 }> = [
   { title: 'ภาพรวม', items: ['main', 'home'] },
-  { title: 'จัดการ ปพ.5', items: ['assignments', 'classrooms', 'students', 'learning-area-heads'] },
+  { title: 'จัดการ ปพ.5', items: ['assignments', 'classrooms', 'students', 'learning-area-heads', 'student-roster-edits'] },
   { title: 'ข้อมูลหลัก', items: ['academic-admins', 'subjects', 'curriculum'] },
   { title: 'ระบบ', items: ['settings-general', 'settings-activity', 'settings-system'] },
 ];
@@ -202,10 +205,13 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [workspaceYearLabel, setWorkspaceYearLabel] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<AdminTabNavigateOptions | null>(null);
   const readOnly = isAdminReadOnly(currentUser);
+  const isDeveloperAccount = currentUser.role === 'super_admin' || currentUser.username.trim().toLowerCase() === 'admin';
+  const currentUserDisplayName = isDeveloperAccount ? 'ผู้พัฒนาระบบ' : currentUser.name;
+  const currentUserRoleLabel = isDeveloperAccount ? 'ผู้พัฒนาระบบ' : ROLE_LABELS[currentUser.role];
   void onOpenTeacherView;
 
   const contentMaxWidth =
-    activeTab === 'students' || activeTab === 'curriculum'
+    activeTab === 'students' || activeTab === 'curriculum' || activeTab === 'student-roster-edits'
       ? 'max-w-none'
       : activeTab === 'home' || activeTab === 'assignments' || activeTab === 'main'
         ? 'max-w-7xl'
@@ -369,9 +375,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
             <div className="flex items-center gap-2.5">
               <div className="flex min-w-0 items-center rounded-full border border-slate-200 bg-white py-1 pl-1 pr-3.5 shadow-sm">
                 <div className="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-xs font-bold text-white">
-                  {currentUser.name.charAt(0)}
+                  {currentUserDisplayName.charAt(0)}
                 </div>
-                <span className="truncate text-sm font-semibold text-slate-700">{currentUser.name}</span>
+                <span className="truncate text-sm font-semibold text-slate-700">{currentUserDisplayName}</span>
               </div>
               <button
                 type="button"
@@ -477,11 +483,11 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
           </div>
           <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] p-2.5 ring-1 ring-white/[0.06]">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-xs font-bold text-white">
-              {currentUser.name.charAt(0)}
+              {currentUserDisplayName.charAt(0)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-white">{currentUser.name}</p>
-              <p className="truncate text-[10.5px] text-slate-300">ผู้ดูแลระบบ</p>
+              <p className="truncate text-[13px] font-semibold text-white">{currentUserDisplayName}</p>
+              <p className="truncate text-[10.5px] text-slate-300">{currentUserRoleLabel}</p>
             </div>
             <button
               type="button"
@@ -600,6 +606,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
             {activeTab === 'curriculum' && <CurriculumIndicatorsPage />}
             {activeTab === 'learning-area-heads' && (
               <LearningAreaHeadsPage currentUser={currentUser} readOnly={readOnly} />
+            )}
+            {activeTab === 'student-roster-edits' && (
+              <StudentRosterEditsPage currentUser={currentUser} initialYearId={workspaceYearId} />
             )}
             {activeTab === 'settings-general' || activeTab === 'settings-activity' || activeTab === 'settings-system' ? (
               <SettingsPage

@@ -6,12 +6,24 @@ import { Sparkles, AlertCircle } from 'lucide-react';
 interface Props {
   students: AppData['students'];
   data: AppData['analytical'];
+  generalInfo: AppData['generalInfo'];
   onChange: (data: AppData['analytical']) => void;
 }
 
-export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) => {
+function buildReportTitle(generalInfo: AppData['generalInfo']) {
+  return [
+    'ผลการประเมินการอ่าน คิดวิเคราะห์ และเขียน',
+    generalInfo.gradeLevel ? `ชั้น ${generalInfo.gradeLevel}` : '',
+    generalInfo.semester ? `ภาคเรียนที่ ${generalInfo.semester}` : '',
+    generalInfo.academicYear ? `ปีการศึกษา ${generalInfo.academicYear}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+export const AnalyticalForm: React.FC<Props> = ({ students, data, generalInfo, onChange }) => {
   const [showAutoFillModal, setShowAutoFillModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const reportTitle = buildReportTitle(generalInfo);
 
   const handleChange = (studentId: string, field: string, value: string) => {
     const numValue = value === '' ? '' : parseInt(value) || 0;
@@ -24,10 +36,13 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
     });
   };
 
-  const handleAutoFill = (minScore: number, maxScore: number) => {
+  const handleAutoFill = (minScore: number, maxScore: number, studentIds?: string[]) => {
     const newData = { ...data };
+    const targetStudents = studentIds?.length
+      ? students.filter(student => studentIds.includes(student.id))
+      : students;
     
-    students.forEach(student => {
+    targetStudents.forEach(student => {
       newData[student.id] = {
         attr1: Math.floor(Math.random() * (maxScore - minScore + 1)) + minScore,
         attr2: Math.floor(Math.random() * (maxScore - minScore + 1)) + minScore,
@@ -87,7 +102,7 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
   const rowsToRender = students.length;
 
   return (
-    <div className="flex justify-center rounded-2xl bg-slate-100/90 p-4 sm:p-6 overflow-auto relative">
+    <div className="relative w-full overflow-auto">
       {/* Clear Confirmation Overlay */}
       {showClearConfirm && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -115,27 +130,27 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
         </div>
       )}
 
-      <div className="bg-white p-4 rounded-lg ring-1 ring-slate-200/80 shadow-[0_12px_32px_-8px_rgb(15,23,42,0.12)]" style={{ width: '1123px', minHeight: '794px', fontFamily: 'Sarabun' }}>
-        <div className="flex justify-between items-center mb-2">
+      <div className="w-full min-w-0 bg-white p-4" style={{ minHeight: 'calc(100vh - 240px)', fontFamily: 'Sarabun' }}>
+        <div className="mb-3 grid gap-2 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
           <h2 className="text-xl font-bold">คิดวิเคราะห์</h2>
-          <button
-            onClick={() => setShowAutoFillModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium transition-colors"
-          >
-            <Sparkles size={18} />
-            สุ่มคะแนน
-          </button>
+          <div className="text-center text-lg font-bold leading-7 text-slate-900 lg:max-w-[760px]">
+            {reportTitle}
+          </div>
+          <div aria-hidden="true" />
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="excel-table whitespace-nowrap">
+        <div className="excel-scroll-area overflow-auto max-w-full">
+          <div className="excel-scroll-content">
+          <table className="excel-table min-w-max whitespace-nowrap">
             <thead>
               <tr>
-                <th className="bg-orange-excel w-32">ชั้นที่ประเมิน</th>
+                <th rowSpan={11} className="bg-orange-excel sticky left-0 z-20" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>เลขที่</th>
+                <th rowSpan={11} className="bg-orange-excel sticky z-20" style={{ left: '48px', width: '112px', minWidth: '112px', maxWidth: '112px' }}>เลขประจำตัว</th>
+                <th rowSpan={11} className="bg-orange-excel sticky z-20" style={{ left: '160px', width: '150px', minWidth: '150px', maxWidth: '150px' }}>เลขประจำตัวประชาชน</th>
+                <th rowSpan={11} className="bg-orange-excel sticky z-20 border-r-2 border-r-slate-400" style={{ left: '310px', width: '292px', minWidth: '292px', maxWidth: '292px' }}>ชื่อ - สกุล</th>
                 <th colSpan={9} className="bg-orange-excel">ประเมินตัวชี้วัดชั้น ม.1-3</th>
               </tr>
               <tr>
-                <th rowSpan={7} className="bg-orange-excel">ตัวชี้วัด</th>
                 <th colSpan={9} className="!text-left px-2 bg-orange-excel font-normal">1. อ่านออกเสียงให้ถูกต้องตามหลักการอ่าน</th>
               </tr>
               <tr><th colSpan={9} className="!text-left px-2 bg-orange-excel font-normal">2. อ่านแล้วจับใจความได้</th></tr>
@@ -145,17 +160,14 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
               <tr><th colSpan={9} className="!text-left px-2 bg-orange-excel font-normal">6. เขียนแสดงความคิดเห็นได้ถูกต้อง</th></tr>
               <tr><th colSpan={9} className="!text-left px-2 bg-orange-excel font-normal">7. เขียนสะกดคำได้ถูกต้องตามหลักภาษาไทย</th></tr>
               <tr>
-                <th className="bg-orange-excel">ภาคเรียน</th>
                 <th colSpan={7} className="bg-orange-excel">ภาคเรียนที่ 2</th>
                 <th rowSpan={2} className="bg-orange-excel w-24">สรุปผลการ<br/>ประเมิน</th>
                 <th rowSpan={2} className="bg-orange-excel w-32">สรุปผลการประเมิน<br/>ปลายปี</th>
               </tr>
               <tr>
-                <th className="bg-orange-excel">ตัวชี้วัด</th>
                 <th className="bg-orange-excel w-10">1</th><th className="bg-orange-excel w-10">2</th><th className="bg-orange-excel w-10">3</th><th className="bg-orange-excel w-10">4</th><th className="bg-orange-excel w-10">5</th><th className="bg-orange-excel w-10">6</th><th className="bg-orange-excel w-10">7</th>
               </tr>
               <tr>
-                <th className="bg-orange-excel">ระดับคุณภาพ</th>
                 <th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th><th className="bg-orange-excel">3</th>
                 <th className="bg-orange-excel">3</th>
                 <th className="bg-orange-excel font-normal">(ดีเยี่ยม ดี ผ่าน ไม่ผ่าน)</th>
@@ -171,7 +183,10 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
 
                 return (
                   <tr key={student ? student.id : `empty-${index}`}>
-                    <td className="text-center">{index + 1}</td>
+                    <td className="text-center sticky left-0 z-10 bg-white" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>{index + 1}</td>
+                    <td className="text-center sticky z-10 bg-white" style={{ left: '48px', width: '112px', minWidth: '112px', maxWidth: '112px' }}>{student?.studentId ?? ''}</td>
+                    <td className="text-center sticky z-10 bg-white" style={{ left: '160px', width: '150px', minWidth: '150px', maxWidth: '150px' }}>{student?.citizenId ?? ''}</td>
+                    <td className="text-left px-2 sticky z-10 bg-white border-r-2 border-r-slate-400" style={{ left: '310px', width: '292px', minWidth: '292px', maxWidth: '292px' }}>{student?.name ?? ''}</td>
                     <td><input type="number" max={3} min={0} className="excel-input text-center" value={attrs['attr1'] ?? ''} onChange={(e) => student && handleChange(student.id, 'attr1', e.target.value)} disabled={!student} /></td>
                     <td><input type="number" max={3} min={0} className="excel-input text-center" value={attrs['attr2'] ?? ''} onChange={(e) => student && handleChange(student.id, 'attr2', e.target.value)} disabled={!student} /></td>
                     <td><input type="number" max={3} min={0} className="excel-input text-center" value={attrs['attr3'] ?? ''} onChange={(e) => student && handleChange(student.id, 'attr3', e.target.value)} disabled={!student} /></td>
@@ -187,9 +202,19 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
             </tbody>
           </table>
         </div>
+        </div>
 
-        <div className="mt-6 flex justify-center">
+        <div className="mt-6 flex flex-wrap justify-center gap-4">
           <button
+            type="button"
+            onClick={() => setShowAutoFillModal(true)}
+            className="flex items-center gap-2 rounded-md bg-emerald-600 px-6 py-2 font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            <Sparkles size={18} />
+            ระบบช่วยลงคะแนนอัตโนมัติ
+          </button>
+          <button
+            type="button"
             onClick={handleClear}
             className="px-6 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors"
           >
@@ -201,6 +226,7 @@ export const AnalyticalForm: React.FC<Props> = ({ students, data, onChange }) =>
       <AutoFillAttributesModal
         isOpen={showAutoFillModal}
         onClose={() => setShowAutoFillModal(false)}
+        students={students}
         onFill={handleAutoFill}
       />
     </div>

@@ -25,8 +25,10 @@ export interface ScoreUnit {
 export interface ScoreConfig {
   learningArea: string;
   subjectName: string;
+  subjectCode?: string;
   standard: string;
   selectedIndicators: string[];
+  storedScore?: number;
   units: ScoreUnit[];
 }
 
@@ -103,6 +105,8 @@ export interface AcademicYear {
   primary_grade_entry_enabled?: boolean;
   primary_entry_start_date?: string | null;
   primary_entry_end_date?: string | null;
+  study_start_date?: string | null;
+  study_end_date?: string | null;
   workspace_status?: AcademicYearWorkspaceStatus | null;
   created_at: string;
 }
@@ -242,6 +246,8 @@ export interface AppData {
     deputyDirector: string;
     schoolDirector: string;
     approvalDate: string;
+    studyStartDate?: string;
+    studyEndDate?: string;
   };
   students: Student[];
   attendance: Record<string, any>;

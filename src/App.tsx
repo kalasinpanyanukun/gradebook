@@ -76,7 +76,19 @@ function SupabaseConfigErrorScreen({ message }: { message: string }) {
   );
 }
 
+function PreviewOnlyApp() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <CurriculumPreviewPage />
+    </Suspense>
+  );
+}
+
 export default function App() {
+  if (readPreviewMode() === 'curriculum') {
+    return <PreviewOnlyApp />;
+  }
+
   if (supabaseConfigError) {
     return <SupabaseConfigErrorScreen message={supabaseConfigError} />;
   }
@@ -280,14 +292,6 @@ function ConfiguredApp() {
       </div>
     </div>
   );
-
-  if (readPreviewMode() === 'curriculum') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <CurriculumPreviewPage />
-      </Suspense>
-    );
-  }
 
   if (authLoading) {
     return (

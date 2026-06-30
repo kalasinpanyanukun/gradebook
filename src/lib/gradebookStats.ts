@@ -207,13 +207,40 @@ function countIndicatorFields(d: AppData): { filled: number; total: number } {
   return { filled: Math.min(filled, total), total };
 }
 
+const COMPLETION_SECTION_WEIGHTS = {
+  scores: 35,
+  attendance: 25,
+  attributes: 15,
+  analytical: 15,
+  indicators: 10,
+} as const;
+
+function weightedCompletion(
+  section: { filled: number; total: number },
+  weight: number,
+): { filled: number; total: number } {
+  if (section.total <= 0) return { filled: 0, total: weight };
+  return {
+    filled: Math.min(1, section.filled / section.total) * weight,
+    total: weight,
+  };
+}
+
 function countGradebookCompletionFields(d: AppData): { filled: number; total: number } {
+  if (d.students.length === 0) return { filled: 0, total: 100 };
+
   const sections = [
-    countScoreFields(d),
-    countAttendanceFields(d),
-    countStudentGridFields(d.students, d.attributes, ATTRIBUTE_FIELDS),
-    countStudentGridFields(d.students, d.analytical, ANALYTICAL_FIELDS),
-    countIndicatorFields(d),
+    weightedCompletion(countScoreFields(d), COMPLETION_SECTION_WEIGHTS.scores),
+    weightedCompletion(countAttendanceFields(d), COMPLETION_SECTION_WEIGHTS.attendance),
+    weightedCompletion(
+      countStudentGridFields(d.students, d.attributes, ATTRIBUTE_FIELDS),
+      COMPLETION_SECTION_WEIGHTS.attributes,
+    ),
+    weightedCompletion(
+      countStudentGridFields(d.students, d.analytical, ANALYTICAL_FIELDS),
+      COMPLETION_SECTION_WEIGHTS.analytical,
+    ),
+    weightedCompletion(countIndicatorFields(d), COMPLETION_SECTION_WEIGHTS.indicators),
   ];
 
   return sections.reduce(
@@ -236,10 +263,9 @@ export function isGradebookFullyComplete(d: AppData): boolean {
     countIndicatorFields(d),
   ];
 
-  const requiredSections = sections.filter((section) => section.total > 0);
-  if (requiredSections.length === 0) return false;
+  if (sections.some((section) => section.total <= 0)) return false;
 
-  return requiredSections.every((section) => section.filled >= section.total);
+  return sections.every((section) => section.filled >= section.total);
 }
 
 function countScoreFields(d: AppData): { filled: number; total: number } {

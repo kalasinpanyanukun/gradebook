@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Standard, getAllSubjects, getGradeLevels } from '../data/curriculumData';
-import { fetchCurriculumStandards, parseClassLevelCode } from '../lib/curriculum';
+import { fetchCurriculumStandards, parseClassLevelCode, type Standard } from '../lib/curriculum';
 import { Plus, Trash2 } from 'lucide-react';
 
 interface Props {
   subjectName: string;
+  subjectCode?: string;
   learningArea?: string;
   gradeLevel: string;
   onSelectIndicators: (standardCode: string, indicators: string[]) => void;
 }
 
-export const StandardIndicatorFilter: React.FC<Props> = ({ subjectName, learningArea, gradeLevel, onSelectIndicators }) => {
+export const StandardIndicatorFilter: React.FC<Props> = ({ subjectName, subjectCode, learningArea, gradeLevel, onSelectIndicators }) => {
   const [selectedSubject, setSelectedSubject] = useState<string>('');
-  const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedStandard, setSelectedStandard] = useState<string>('');
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [isManualMode, setIsManualMode] = useState<boolean>(false);
@@ -23,55 +22,37 @@ export const StandardIndicatorFilter: React.FC<Props> = ({ subjectName, learning
 
   const classLevel = parseClassLevelCode(gradeLevel);
 
-  // Initialize subject and grade from props
   useEffect(() => {
-    // Try to find a matching subject in our database that has M.3 data
-    const allSubjects = getAllSubjects().filter(sub => getGradeLevels(sub).includes('ม.3'));
-    
-    let matchedSubject = allSubjects.find(s => subjectName.includes(s) || s.includes(subjectName));
-    
-    if (!matchedSubject && learningArea) {
-      matchedSubject = allSubjects.find(s => learningArea.includes(s) || s.includes(learningArea));
-    }
-    
-    // Fallback matching for common subjects
-    if (!matchedSubject) {
-      const searchStr = `${subjectName} ${learningArea || ''}`.toLowerCase();
-      if (searchStr.includes('คณิต')) matchedSubject = 'คณิตศาสตร์';
-      else if (searchStr.includes('วิทย์') || searchStr.includes('เทคโนโลยี')) matchedSubject = 'วิทยาศาสตร์และเทคโนโลยี';
-      else if (searchStr.includes('ไทย')) matchedSubject = 'ภาษาไทย';
-      else if (searchStr.includes('อังกฤษ') || searchStr.includes('ต่างประเทศ')) matchedSubject = 'ภาษาต่างประเทศ';
-      else if (searchStr.includes('สังคม') || searchStr.includes('ประวัติ') || searchStr.includes('พระพุทธ')) matchedSubject = 'สังคมศึกษา ศาสนา และวัฒนธรรม';
-      else if (searchStr.includes('สุข') || searchStr.includes('พละ')) matchedSubject = 'สุขศึกษาและพลศึกษา';
-      else if (searchStr.includes('ศิลปะ') || searchStr.includes('ทัศนศิลป์') || searchStr.includes('ดนตรี') || searchStr.includes('นาฏศิลป์')) matchedSubject = 'ศิลปะ';
-      else if (searchStr.includes('การงาน') || searchStr.includes('อาชีพ')) matchedSubject = 'การงานอาชีพ';
-    }
-    
-    if (matchedSubject) {
-      setSelectedSubject(matchedSubject);
-      setSelectedGrade(classLevel);
-      setIsManualMode(false);
-    } else {
-      if (allSubjects.length > 0) {
-        setSelectedSubject(allSubjects[0]);
-        setSelectedGrade(classLevel);
-      }
-      setIsManualMode(true);
-    }
+    setSelectedSubject(subjectName || learningArea || '');
+    setSelectedStandard('');
+    setSelectedIndicators([]);
+    setIsManualMode(false);
   }, [subjectName, learningArea, gradeLevel, classLevel]);
 
   useEffect(() => {
-    if (!learningArea || !classLevel) return;
+    const area = learningArea || subjectName;
+    if (!area || !classLevel) return;
     let cancelled = false;
     setLoadingStandards(true);
-    void fetchCurriculumStandards(learningArea, classLevel).then((data) => {
+    void fetchCurriculumStandards(area, classLevel, subjectName, { subjectCode }).then((data) => {
       if (!cancelled) {
         setStandards(data);
+        setSelectedStandard((current) =>
+          current && data.some((standard) => standard.code === current) ? current : '',
+        );
+        setSelectedIndicators([]);
+        setLoadingStandards(false);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setStandards([]);
+        setSelectedStandard('');
+        setSelectedIndicators([]);
         setLoadingStandards(false);
       }
     });
     return () => { cancelled = true; };
-  }, [learningArea, classLevel]);
+  }, [learningArea, subjectName, subjectCode, classLevel]);
 
   const handleStandardChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const stdCode = e.target.value;
@@ -205,7 +186,7 @@ export const StandardIndicatorFilter: React.FC<Props> = ({ subjectName, learning
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-2 max-h-60 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-white custom-scrollbar">
+                  <div className="space-y-2 p-3 border border-slate-200 rounded-lg bg-white">
                     {currentStandard.indicators.map(ind => (
                       <label key={ind.code} className="flex items-start space-x-3 cursor-pointer p-2 hover:bg-blue-50/50 rounded-md transition-colors border border-transparent hover:border-blue-100">
                         <input 

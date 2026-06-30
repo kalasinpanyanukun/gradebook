@@ -38,7 +38,7 @@ export const Instructions1Form: React.FC = () => {
               <p>ตัวชี้วัด/คะแนน เพื่อให้ทราบว่าการประเมินแต่ละครั้งจะประเมินข้อใด ดังตัวอย่าง</p>
               
               <div className="my-4 w-3/4">
-                <table className="w-full border-collapse border border-slate-500 text-center text-sm">
+                <table className="instruction-table w-full border-collapse border border-slate-500 text-center text-sm">
                   <tbody>
                     <tr>
                       <td colSpan={10} className="border border-slate-500 font-bold py-1">คะแนนวัดผลระหว่างเรียน</td>
@@ -84,7 +84,7 @@ export const Instructions1Form: React.FC = () => {
               <p className="pl-6">ของคะแนนเดิมให้ปรับเหลือเท่าครึ่งหนึ่งของคะแนนในแต่ละข้อ ดังตัวอย่าง</p>
 
               <div className="my-4 w-3/4">
-                <table className="w-full border-collapse border border-slate-500 text-center text-sm">
+                <table className="instruction-table w-full border-collapse border border-slate-500 text-center text-sm">
                   <tbody>
                     <tr>
                       <td colSpan={10} className="border border-slate-500 font-bold py-1">คะแนนวัดผลระหว่างเรียน</td>

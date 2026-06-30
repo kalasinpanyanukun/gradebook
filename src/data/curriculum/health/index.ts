@@ -22,11 +22,16 @@ function cleanIndicatorText(value: string | null | undefined): string | null {
   return value.replace(/\uF098/g, '').replace(/\s+/g, ' ').trim();
 }
 
+function healthSubjectFromStrand(row: RawRow): string {
+  if (row.strandNo === 3) return 'พลศึกษา';
+  return 'สุขศึกษา';
+}
+
 function mapRawRow(row: RawRow): CurriculumIndicatorRecord {
   return {
     id: row.id,
     learningArea: HEALTH_LEARNING_AREA,
-    subject: row.subject,
+    subject: healthSubjectFromStrand(row),
     gradeLevel: row.gradeLevel as CurriculumIndicatorRecord['gradeLevel'],
     strandNo: row.strandNo,
     strandName: row.strandName,

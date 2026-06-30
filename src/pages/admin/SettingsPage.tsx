@@ -73,6 +73,9 @@ const ENTRY_WINDOW_MIGRATION_HINT =
 const PRIMARY_SETTINGS_MIGRATION_HINT =
   'ฐานข้อมูลยังไม่มีคอลัมน์ตั้งค่าระดับประถม กรุณารัน migration `supabase/migrations/0022_primary_entry_and_activity_role.sql` และ `0023_primary_entry_dates.sql` ใน Supabase SQL Editor';
 
+const STUDY_PERIOD_MIGRATION_HINT =
+  'ฐานข้อมูลยังไม่มีคอลัมน์ระยะเวลาเรียน กรุณารัน migration `supabase/migrations/0027_study_period_dates.sql` ใน Supabase SQL Editor';
+
 const PRIMARY_LEVEL_CODES = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'] as const;
 
 const SYSTEM_HEALTH_MIGRATION_HINT =
@@ -197,6 +200,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [primaryToggleSupported, setPrimaryToggleSupported] = useState(true);
   const [primaryDateColumnsSupported, setPrimaryDateColumnsSupported] = useState(true);
   const [savingPrimary, setSavingPrimary] = useState(false);
+  const [studyDraftStart, setStudyDraftStart] = useState('');
+  const [studyDraftEnd, setStudyDraftEnd] = useState('');
+  const [studyPeriodSupported, setStudyPeriodSupported] = useState(true);
+  const [savingStudyPeriod, setSavingStudyPeriod] = useState(false);
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
 
   const canWrite = !readOnly && (currentUser.role === 'super_admin' || currentUser.role === 'admin');
@@ -207,11 +214,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setPrimaryEntryEnabled(selectedYear?.primary_grade_entry_enabled !== false);
     setPrimaryDraftEntryStart(selectedYear?.primary_entry_start_date ?? '');
     setPrimaryDraftEntryEnd(selectedYear?.primary_entry_end_date ?? '');
+    setStudyDraftStart(selectedYear?.study_start_date ?? '');
+    setStudyDraftEnd(selectedYear?.study_end_date ?? '');
   }, [
     selectedYear?.id,
     selectedYear?.primary_grade_entry_enabled,
     selectedYear?.primary_entry_start_date,
     selectedYear?.primary_entry_end_date,
+    selectedYear?.study_start_date,
+    selectedYear?.study_end_date,
   ]);
 
   const loadYears = useCallback(async () => {
@@ -566,6 +577,67 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  const saveStudyPeriod = async () => {
+    if (!canWrite || !selectedYearId || !studyPeriodSupported) return;
+
+    if (studyDraftStart && studyDraftEnd && studyDraftEnd < studyDraftStart) {
+      setError('วันที่สิ้นสุดต้องไม่ก่อนวันเริ่มต้น');
+      return;
+    }
+
+    setSavingStudyPeriod(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const { error: updateError } = await supabase
+        .from('academic_years')
+        .update({
+          study_start_date: studyDraftStart || null,
+          study_end_date: studyDraftEnd || null,
+        })
+        .eq('id', selectedYearId);
+
+      if (updateError) {
+        if (
+          isSchemaCacheErrorFor(updateError, 'study_start_date') ||
+          isSchemaCacheErrorFor(updateError, 'study_end_date')
+        ) {
+          setStudyPeriodSupported(false);
+          throw new Error(STUDY_PERIOD_MIGRATION_HINT);
+        }
+        throw updateError;
+      }
+
+      setYears((items) =>
+        items.map((year) =>
+          year.id === selectedYearId
+            ? {
+                ...year,
+                study_start_date: studyDraftStart || null,
+                study_end_date: studyDraftEnd || null,
+              }
+            : year,
+        ),
+      );
+
+      await logActivity(
+        currentUser.schoolId,
+        currentUser.id,
+        currentUser.name,
+        `บันทึกระยะเวลาเรียน (${studyDraftStart || '—'} ถึง ${studyDraftEnd || '—'})`,
+        currentUser.role,
+      );
+
+      setMessage('บันทึกระยะเวลาเรียนแล้ว');
+      if (section === 'activity') await loadActivity();
+    } catch (err) {
+      setError(getErrorMessage(err, 'บันทึกระยะเวลาเรียนไม่สำเร็จ'));
+    } finally {
+      setSavingStudyPeriod(false);
+    }
+  };
+
   const savePrimarySettings = async () => {
     if (!canWrite || !selectedYearId) return;
 
@@ -769,6 +841,50 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               ยังไม่มีคอลัมน์วันที่ระดับประถม — กรุณารัน migration `0023_primary_entry_dates.sql`
             </div>
           )}
+          {!studyPeriodSupported && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              {STUDY_PERIOD_MIGRATION_HINT}
+            </div>
+          )}
+
+          <section className="ui-card p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h5 className="text-lg font-extrabold text-slate-900">ระยะเวลาเรียน</h5>
+                <p className="mt-1 text-sm text-slate-500">
+                  กำหนดวันเริ่มต้นและสิ้นสุดการเรียนสำหรับปีการศึกษา {selectedYear?.year_be ?? '—'} เพื่อแสดงในหน้าเวลาเรียนของครูทุกคน
+                </p>
+              </div>
+
+              <div className="grid w-full gap-3 sm:grid-cols-[1fr_1fr_auto] lg:max-w-3xl">
+                <label className="flex min-w-0 flex-col">
+                  <span className="text-[11px] font-bold text-slate-500">วันที่เริ่มต้น</span>
+                  <ThaiDateCalendarInput
+                    value={studyDraftStart}
+                    onChange={setStudyDraftStart}
+                    disabled={!canWrite || !studyPeriodSupported}
+                  />
+                </label>
+                <label className="flex min-w-0 flex-col">
+                  <span className="text-[11px] font-bold text-slate-500">วันที่สิ้นสุด</span>
+                  <ThaiDateCalendarInput
+                    value={studyDraftEnd}
+                    onChange={setStudyDraftEnd}
+                    disabled={!canWrite || !studyPeriodSupported}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void saveStudyPeriod()}
+                  disabled={!canWrite || savingStudyPeriod || !studyPeriodSupported}
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:self-end"
+                >
+                  {savingStudyPeriod ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarRange className="mr-2 h-4 w-4" />}
+                  บันทึก
+                </button>
+              </div>
+            </div>
+          </section>
 
           <section className="ui-card p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -910,21 +1026,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {section === 'activity' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-end">
-            <button type="button" onClick={() => void loadActivity()} className="btn btn-secondary text-xs">
-              รีเฟรช
-            </button>
-          </div>
-
           {loadingActivity ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
               <Loader2 className="mr-2 h-6 w-6 animate-spin" /> กำลังโหลด...
             </div>
           ) : (
             <div className="ui-card overflow-hidden">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <h5 className="font-bold text-slate-900">บันทึกกิจกรรม</h5>
-                <p className="mt-0.5 text-xs text-slate-500">รวมกิจกรรมของผู้ดูแลระบบและผู้บริหาร</p>
+              <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h5 className="font-bold text-slate-900">บันทึกกิจกรรม</h5>
+                  <p className="mt-0.5 text-xs text-slate-500">รวมกิจกรรมของผู้ดูแลระบบและผู้บริหาร</p>
+                </div>
+                <button type="button" onClick={() => void loadActivity()} className="btn btn-secondary text-xs">
+                  รีเฟรช
+                </button>
               </div>
               <ActivityLogTable
                 logs={visibleActivityLogs}

@@ -114,7 +114,7 @@ export function canAccessTeacherDashboard(user: AppUser | null): boolean {
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  super_admin: 'ผู้พัฒนาระบบ (Super Admin)',
+  super_admin: 'ผู้พัฒนาระบบ',
   admin: 'ผู้ดูแลระบบ (admin)',
   teacher: 'ครู',
   executive: 'ผู้บริหาร',
